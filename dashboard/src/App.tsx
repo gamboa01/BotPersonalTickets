@@ -4,6 +4,7 @@ import { KpiCard } from "./components/KpiCard";
 import { CategoryChart } from "./components/CategoryChart";
 import { TrendChart } from "./components/TrendChart";
 import { TicketsTable } from "./components/TicketsTable";
+import { gtDayKey } from "./timezone";
 
 const TREND_DAYS = 14;
 
@@ -70,26 +71,19 @@ export default function App() {
 
   const trendData = useMemo(() => {
     const days: { fecha: string; creados: number; resueltos: number }[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+
+    // Ancla en el día calendario de Guatemala (no en el del navegador de quien
+    // visite el dashboard), para que un ticket de la noche no se cuente en el día siguiente.
+    const [y, m, d] = gtDayKey(new Date().toISOString()).split("-").map(Number);
+    const todayAnchor = Date.UTC(y, m - 1, d);
 
     for (let i = TREND_DAYS - 1; i >= 0; i--) {
-      const day = new Date(today);
-      day.setDate(day.getDate() - i);
-      const label = day.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
+      const dayDate = new Date(todayAnchor - i * 86400000);
+      const dayKey = dayDate.toISOString().slice(0, 10);
+      const label = dayDate.toLocaleDateString("es-GT", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 
-      const creados = tickets.filter((t) => {
-        const d = new Date(t.created_at);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime() === day.getTime();
-      }).length;
-
-      const resueltos = tickets.filter((t) => {
-        if (!t.resolved_at) return false;
-        const d = new Date(t.resolved_at);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime() === day.getTime();
-      }).length;
+      const creados = tickets.filter((t) => gtDayKey(t.created_at) === dayKey).length;
+      const resueltos = tickets.filter((t) => t.resolved_at && gtDayKey(t.resolved_at) === dayKey).length;
 
       days.push({ fecha: label, creados, resueltos });
     }
