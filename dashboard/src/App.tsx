@@ -122,15 +122,15 @@ export default function App() {
       </header>
 
       <section className="kpi-grid">
-        <KpiCard label="Total de tickets" value={stats.total} accent="#4f46e5" />
-        <KpiCard label="Pendientes" value={stats.pendientes} accent="#f59e0b" />
-        <KpiCard label="Abiertos" value={stats.abiertos} accent="#ef4444" />
-        <KpiCard label="En progreso" value={stats.enProgreso} accent="#0ea5e9" />
-        <KpiCard label="Resueltos" value={stats.resueltos} accent="#10b981" />
+        <KpiCard label="Total de tickets" value={stats.total} accent="#22d3ee" />
+        <KpiCard label="Pendientes" value={stats.pendientes} accent="#fbbf24" />
+        <KpiCard label="Abiertos" value={stats.abiertos} accent="#fb7185" />
+        <KpiCard label="En progreso" value={stats.enProgreso} accent="#38bdf8" />
+        <KpiCard label="Resueltos" value={stats.resueltos} accent="#4ade80" />
         <KpiCard
           label="Tiempo prom. de resolución"
           value={stats.promedioResolucion !== null ? formatHours(stats.promedioResolucion) : "-"}
-          accent="#8b5cf6"
+          accent="#c084fc"
         />
       </section>
 
