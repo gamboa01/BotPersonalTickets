@@ -103,6 +103,7 @@ function helpText(esAdmin: boolean) {
 /nuevo - crear un ticket nuevo
 /mistickets - ver tus tickets abiertos
 /estado &lt;id&gt; - ver detalle de un ticket
+/cancelar - cancelar la operación en curso
 /ayuda - ver esta ayuda`;
 
   if (esAdmin) {
@@ -125,11 +126,18 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
 
     case "/nuevo": {
-      const { data: categorias } = await supabase.from("categorias").select("*").order("id");
+      const { data: categoriasRaw } = await supabase.from("categorias").select("*").order("id");
+      // "Otros" siempre al final, sin importar el orden de inserción.
+      const categorias = [...(categoriasRaw ?? [])].sort((a, b) =>
+        a.nombre === "Otros" ? 1 : b.nombre === "Otros" ? -1 : 0
+      );
       await setSession(telegramId, "awaiting_category", {});
       await sendMessage(chatId, "Selecciona una categoría:", {
         reply_markup: {
-          inline_keyboard: (categorias ?? []).map((c) => [{ text: c.nombre, callback_data: `cat:${c.id}` }]),
+          inline_keyboard: [
+            ...categorias.map((c) => [{ text: c.nombre, callback_data: `cat:${c.id}` }]),
+            [{ text: "❌ Cancelar", callback_data: "cancel" }],
+          ],
         },
       });
       break;
@@ -242,6 +250,13 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
     }
 
+    case "/cancelar": {
+      const session = await getSession(telegramId);
+      await clearSession(telegramId);
+      await sendMessage(chatId, session ? "❌ Operación cancelada." : "No tienes ninguna operación en curso.");
+      break;
+    }
+
     default:
       await sendMessage(chatId, "No entendí ese comando. Usa /ayuda para ver las opciones.");
   }
@@ -340,6 +355,12 @@ async function handleCallback(callback: any) {
   const data: string = callback.data;
   await answerCallback(callback.id);
 
+  if (data === "cancel") {
+    await clearSession(telegramId);
+    await sendMessage(chatId, "❌ Operación cancelada.");
+    return;
+  }
+
   if (data.startsWith("cat:")) {
     const categoria_id = Number(data.split(":")[1]);
     await setSession(telegramId, "awaiting_priority", { categoria_id });
@@ -354,6 +375,7 @@ async function handleCallback(callback: any) {
             { text: "🟠 Alta", callback_data: "pri:alta" },
             { text: "🔴 Crítica", callback_data: "pri:critica" },
           ],
+          [{ text: "❌ Cancelar", callback_data: "cancel" }],
         ],
       },
     });
