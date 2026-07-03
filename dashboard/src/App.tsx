@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase, Ticket } from "./supabaseClient";
+import { supabase, Comentario, Ticket } from "./supabaseClient";
 import { KpiCard } from "./components/KpiCard";
 import { CategoryChart } from "./components/CategoryChart";
 import { TrendChart } from "./components/TrendChart";
 import { TicketsTable } from "./components/TicketsTable";
+import { TicketDetailModal } from "./components/TicketDetailModal";
 import { gtDayKey } from "./timezone";
 
 const TREND_DAYS = 14;
@@ -18,6 +19,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [comentarios, setComentarios] = useState<Comentario[]>([]);
+  const [loadingComentarios, setLoadingComentarios] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -95,6 +99,18 @@ export default function App() {
     return tickets.filter((t) => t.estado === filtroEstado);
   }, [tickets, filtroEstado]);
 
+  async function openTicket(ticket: Ticket) {
+    setSelectedTicket(ticket);
+    setLoadingComentarios(true);
+    const { data } = await supabase
+      .from("comentarios")
+      .select("*")
+      .eq("ticket_id", ticket.id)
+      .order("created_at");
+    setComentarios((data ?? []) as Comentario[]);
+    setLoadingComentarios(false);
+  }
+
   if (loading) return <div className="status-screen">Cargando datos...</div>;
   if (error) return <div className="status-screen error">Error al cargar datos: {error}</div>;
 
@@ -140,8 +156,17 @@ export default function App() {
             <option value="cerrado">Cerrados</option>
           </select>
         </div>
-        <TicketsTable tickets={filteredTickets} />
+        <TicketsTable tickets={filteredTickets} onRowClick={openTicket} />
       </section>
+
+      {selectedTicket && (
+        <TicketDetailModal
+          ticket={selectedTicket}
+          comentarios={comentarios}
+          loadingComentarios={loadingComentarios}
+          onClose={() => setSelectedTicket(null)}
+        />
+      )}
     </div>
   );
 }

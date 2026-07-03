@@ -29,3 +29,11 @@ export interface Categoria {
   id: number;
   nombre: string;
 }
+
+export interface Comentario {
+  id: number;
+  ticket_id: number;
+  autor: string;
+  texto: string;
+  created_at: string;
+}
