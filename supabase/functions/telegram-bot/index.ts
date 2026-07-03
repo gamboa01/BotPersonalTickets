@@ -4,6 +4,7 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ADMIN_CHAT_ID = Deno.env.get("ADMIN_CHAT_ID");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -22,6 +23,21 @@ function sendMessage(chatId: number, text: string, extra: Record<string, unknown
 
 function answerCallback(id: string, text?: string) {
   return tg("answerCallbackQuery", { callback_query_id: id, text });
+}
+
+// Los mensajes se envían con parse_mode HTML; cualquier texto que venga del
+// usuario (nombre, descripción, notas) debe escaparse antes de interpolarlo.
+function escapeHtml(text: string) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+const GT_TIMEZONE = "America/Guatemala";
+function formatGt(iso: string) {
+  return new Date(iso).toLocaleString("es-GT", {
+    timeZone: GT_TIMEZONE,
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 }
 
 async function getSession(telegramId: number) {
@@ -43,6 +59,34 @@ async function clearSession(telegramId: number) {
   await supabase.from("bot_sessions").delete().eq("telegram_id", telegramId);
 }
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
+
+// Devuelve true si la acción debe bloquearse. Avisa una sola vez por ventana
+// para no generar respuestas en cadena que amplifiquen el spam.
+async function isRateLimited(chatId: number, telegramId: number): Promise<boolean> {
+  const now = new Date();
+  const { data } = await supabase.from("rate_limits").select("*").eq("telegram_id", telegramId).maybeSingle();
+
+  const windowExpired = !data || now.getTime() - new Date(data.window_start).getTime() > RATE_LIMIT_WINDOW_MS;
+
+  if (windowExpired) {
+    await supabase
+      .from("rate_limits")
+      .upsert({ telegram_id: telegramId, window_start: now.toISOString(), count: 1 });
+    return false;
+  }
+
+  const newCount = data.count + 1;
+  await supabase.from("rate_limits").update({ count: newCount }).eq("telegram_id", telegramId);
+
+  if (newCount === RATE_LIMIT_MAX + 1) {
+    await sendMessage(chatId, "⏳ Estás enviando demasiados mensajes. Espera un minuto e intenta de nuevo.");
+  }
+
+  return newCount > RATE_LIMIT_MAX;
+}
+
 const HELP = `<b>Comandos disponibles</b>
 /nuevo - crear un ticket nuevo
 /mistickets - ver tus tickets abiertos
@@ -57,7 +101,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
   switch (cmd) {
     case "/start":
     case "/ayuda":
-      await sendMessage(chatId, `Hola ${name} 👋\n\n${HELP}`);
+      await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${HELP}`);
       break;
 
     case "/nuevo": {
@@ -83,7 +127,9 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         await sendMessage(chatId, "No tienes tickets abiertos. Usa /nuevo para crear uno.");
         break;
       }
-      const lines = tickets.map((t) => `#${t.id} [${t.estado}] (${t.prioridad}) - ${t.descripcion.slice(0, 60)}`);
+      const lines = tickets.map(
+        (t) => `#${t.id} [${t.estado}] (${t.prioridad}) - ${escapeHtml(t.descripcion.slice(0, 60))}`
+      );
       await sendMessage(chatId, lines.join("\n"));
       break;
     }
@@ -99,7 +145,9 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         .select("*, categorias(nombre)")
         .eq("id", id)
         .maybeSingle();
-      if (!ticket) {
+      const esAdmin = ADMIN_CHAT_ID && String(telegramId) === ADMIN_CHAT_ID;
+      if (!ticket || (!esAdmin && ticket.reportado_por !== telegramId)) {
+        // Mismo mensaje en ambos casos: no revelar si el ticket existe pero es de otra persona.
         await sendMessage(chatId, `No existe el ticket #${id}`);
         break;
       }
@@ -111,18 +159,27 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
 
       let msg =
         `<b>Ticket #${ticket.id}</b>\n` +
-        `Categoría: ${ticket.categorias?.nombre ?? "-"}\n` +
+        `Categoría: ${escapeHtml(ticket.categorias?.nombre ?? "-")}\n` +
         `Prioridad: ${ticket.prioridad}\n` +
         `Estado: ${ticket.estado}\n` +
-        `Descripción: ${ticket.descripcion}`;
+        `Descripción: ${escapeHtml(ticket.descripcion)}\n` +
+        `Creado: ${formatGt(ticket.created_at)}`;
+      if (ticket.resolved_at) {
+        msg += `\nResuelto: ${formatGt(ticket.resolved_at)}`;
+      }
       if (comentarios?.length) {
-        msg += `\n\n<b>Historial:</b>\n` + comentarios.map((c) => `- ${c.texto}`).join("\n");
+        msg +=
+          `\n\n<b>Historial:</b>\n` + comentarios.map((c) => `- ${escapeHtml(c.texto)}`).join("\n");
       }
       await sendMessage(chatId, msg);
       break;
     }
 
     case "/resolver": {
+      if (!ADMIN_CHAT_ID || String(telegramId) !== ADMIN_CHAT_ID) {
+        await sendMessage(chatId, "No tienes permiso para resolver tickets.");
+        break;
+      }
       const id = Number(arg);
       if (!id) {
         await sendMessage(chatId, "Uso: /resolver <id>");
@@ -174,6 +231,15 @@ async function handleFreeText(chatId: number, telegramId: number, name: string, 
       return;
     }
     await sendMessage(chatId, `✅ Ticket #${ticket.id} creado con prioridad ${prioridad}.`);
+
+    if (ADMIN_CHAT_ID && String(telegramId) !== ADMIN_CHAT_ID) {
+      await sendMessage(
+        Number(ADMIN_CHAT_ID),
+        `🆕 <b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nPrioridad: ${prioridad}\nCreado: ${formatGt(
+          ticket.created_at
+        )}\n${escapeHtml(text)}`
+      );
+    }
     return;
   }
 
@@ -244,7 +310,14 @@ Deno.serve(async (req) => {
 
   try {
     if (update.callback_query) {
-      await handleCallback(update.callback_query);
+      // deno-lint-ignore no-explicit-any
+      const callback = update.callback_query as any;
+      const limited = await isRateLimited(callback.message.chat.id, callback.from.id);
+      if (limited) {
+        await answerCallback(callback.id);
+      } else {
+        await handleCallback(callback);
+      }
     } else if (update.message) {
       // deno-lint-ignore no-explicit-any
       const message = update.message as any;
@@ -253,10 +326,13 @@ Deno.serve(async (req) => {
       const name = message.from.first_name ?? "usuario";
       const text: string | undefined = message.text;
 
-      if (text?.startsWith("/")) {
-        await handleCommand(chatId, telegramId, name, text);
-      } else if (text) {
-        await handleFreeText(chatId, telegramId, name, text);
+      const limited = await isRateLimited(chatId, telegramId);
+      if (!limited) {
+        if (text?.startsWith("/")) {
+          await handleCommand(chatId, telegramId, name, text);
+        } else if (text) {
+          await handleFreeText(chatId, telegramId, name, text);
+        }
       }
     }
   } catch (e) {
