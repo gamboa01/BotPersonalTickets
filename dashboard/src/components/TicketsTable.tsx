@@ -3,6 +3,7 @@ import { formatGt } from "../timezone";
 
 interface TicketsTableProps {
   tickets: Ticket[];
+  onRowClick: (ticket: Ticket) => void;
 }
 
 const ESTADO_LABEL: Record<Ticket["estado"], string> = {
@@ -12,7 +13,7 @@ const ESTADO_LABEL: Record<Ticket["estado"], string> = {
   cerrado: "Cerrado",
 };
 
-export function TicketsTable({ tickets }: TicketsTableProps) {
+export function TicketsTable({ tickets, onRowClick }: TicketsTableProps) {
   if (tickets.length === 0) {
     return <p className="empty-state">No hay tickets que coincidan con el filtro.</p>;
   }
@@ -33,7 +34,7 @@ export function TicketsTable({ tickets }: TicketsTableProps) {
         </thead>
         <tbody>
           {tickets.map((t) => (
-            <tr key={t.id}>
+            <tr key={t.id} className="clickable-row" onClick={() => onRowClick(t)}>
               <td>{t.id}</td>
               <td className="descripcion-cell">{t.descripcion}</td>
               <td>{t.categorias?.nombre ?? "-"}</td>
