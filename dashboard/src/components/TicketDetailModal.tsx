@@ -55,7 +55,7 @@ export function TicketDetailModal({ ticket, comentarios, loadingComentarios, onC
             {comentarios.map((c) => (
               <li key={c.id}>
                 <span className="historial-fecha">{formatGt(c.created_at)}</span>
-                <span>{c.texto}</span>
+                <span className="historial-texto">{c.texto}</span>
               </li>
             ))}
           </ul>

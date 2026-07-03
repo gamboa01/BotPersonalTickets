@@ -265,3 +265,8 @@ td {
   font-size: 12px;
   color: #9ca3af;
 }
+
+.historial-texto {
+  display: block;
+  white-space: pre-wrap;
+}
