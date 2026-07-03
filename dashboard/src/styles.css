@@ -167,3 +167,101 @@ td {
   background: #e5e7eb;
   color: #374151;
 }
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover {
+  background: #f9fafb;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 30, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.modal-header h2 {
+  margin: 0;
+}
+
+.modal-close {
+  border: none;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #6b7280;
+  line-height: 1;
+}
+
+.modal-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+
+.modal-meta dt {
+  color: #6b7280;
+}
+
+.modal-meta dd {
+  margin: 0;
+}
+
+.modal h3 {
+  font-size: 14px;
+  margin: 16px 0 8px;
+  color: #374151;
+}
+
+.modal-descripcion {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.modal-historial {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-historial li {
+  font-size: 14px;
+  border-left: 2px solid #e5e7eb;
+  padding-left: 10px;
+}
+
+.historial-fecha {
+  display: block;
+  font-size: 12px;
+  color: #9ca3af;
+}
