@@ -59,6 +59,17 @@ async function clearSession(telegramId: number) {
   await supabase.from("bot_sessions").delete().eq("telegram_id", telegramId);
 }
 
+function isAdmin(telegramId: number) {
+  return !!ADMIN_CHAT_ID && String(telegramId) === ADMIN_CHAT_ID;
+}
+
+// Avisa al usuario que reportó el ticket, salvo que sea la misma persona
+// que está haciendo la actualización (para no notificarse a sí mismo).
+async function notifyReporter(reportedBy: number, actorTelegramId: number, text: string) {
+  if (reportedBy === actorTelegramId) return;
+  await sendMessage(Number(reportedBy), text);
+}
+
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
 
@@ -87,12 +98,21 @@ async function isRateLimited(chatId: number, telegramId: number): Promise<boolea
   return newCount > RATE_LIMIT_MAX;
 }
 
-const HELP = `<b>Comandos disponibles</b>
+function helpText(esAdmin: boolean) {
+  let help = `<b>Comandos disponibles</b>
 /nuevo - crear un ticket nuevo
 /mistickets - ver tus tickets abiertos
 /estado &lt;id&gt; - ver detalle de un ticket
-/resolver &lt;id&gt; - marcar un ticket como resuelto
 /ayuda - ver esta ayuda`;
+
+  if (esAdmin) {
+    help += `
+/seguimiento &lt;id&gt; - agregar un comentario de seguimiento (pasa a en progreso)
+/resolver &lt;id&gt; - marcar un ticket como resuelto`;
+  }
+
+  return help;
+}
 
 async function handleCommand(chatId: number, telegramId: number, name: string, text: string) {
   const [cmd, ...rest] = text.trim().split(/\s+/);
@@ -101,7 +121,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
   switch (cmd) {
     case "/start":
     case "/ayuda":
-      await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${HELP}`);
+      await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
       break;
 
     case "/nuevo": {
@@ -145,8 +165,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         .select("*, categorias(nombre)")
         .eq("id", id)
         .maybeSingle();
-      const esAdmin = ADMIN_CHAT_ID && String(telegramId) === ADMIN_CHAT_ID;
-      if (!ticket || (!esAdmin && ticket.reportado_por !== telegramId)) {
+      if (!ticket || (!isAdmin(telegramId) && ticket.reportado_por !== telegramId)) {
         // Mismo mensaje en ambos casos: no revelar si el ticket existe pero es de otra persona.
         await sendMessage(chatId, `No existe el ticket #${id}`);
         break;
@@ -175,8 +194,32 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
     }
 
+    case "/seguimiento": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para actualizar tickets.");
+        break;
+      }
+      const id = Number(arg);
+      if (!id) {
+        await sendMessage(chatId, "Uso: /seguimiento <id>");
+        break;
+      }
+      const { data: ticket } = await supabase.from("tickets").select("id, estado").eq("id", id).maybeSingle();
+      if (!ticket) {
+        await sendMessage(chatId, `No existe el ticket #${id}`);
+        break;
+      }
+      if (ticket.estado === "resuelto" || ticket.estado === "cerrado") {
+        await sendMessage(chatId, `El ticket #${id} ya está ${ticket.estado}.`);
+        break;
+      }
+      await setSession(telegramId, "awaiting_seguimiento", { ticket_id: id });
+      await sendMessage(chatId, `Escribe el comentario de seguimiento para el ticket #${id}:`);
+      break;
+    }
+
     case "/resolver": {
-      if (!ADMIN_CHAT_ID || String(telegramId) !== ADMIN_CHAT_ID) {
+      if (!isAdmin(telegramId)) {
         await sendMessage(chatId, "No tienes permiso para resolver tickets.");
         break;
       }
@@ -232,7 +275,7 @@ async function handleFreeText(chatId: number, telegramId: number, name: string, 
     }
     await sendMessage(chatId, `✅ Ticket #${ticket.id} creado con prioridad ${prioridad}.`);
 
-    if (ADMIN_CHAT_ID && String(telegramId) !== ADMIN_CHAT_ID) {
+    if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
       await sendMessage(
         Number(ADMIN_CHAT_ID),
         `🆕 <b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nPrioridad: ${prioridad}\nCreado: ${formatGt(
@@ -243,15 +286,47 @@ async function handleFreeText(chatId: number, telegramId: number, name: string, 
     return;
   }
 
+  if (session.step === "awaiting_seguimiento") {
+    const { ticket_id } = session.payload as { ticket_id: number };
+    await supabase.from("comentarios").insert({ ticket_id, autor: name, texto: `Seguimiento: ${text}` });
+    const { data: ticket } = await supabase
+      .from("tickets")
+      .update({ estado: "en_progreso" })
+      .eq("id", ticket_id)
+      .select("reportado_por")
+      .single();
+    await clearSession(telegramId);
+    await sendMessage(chatId, `✅ Ticket #${ticket_id} actualizado (en progreso).`);
+
+    if (ticket?.reportado_por) {
+      await notifyReporter(
+        ticket.reportado_por,
+        telegramId,
+        `🔧 <b>Actualización de tu ticket #${ticket_id}</b>\n${escapeHtml(text)}`
+      );
+    }
+    return;
+  }
+
   if (session.step === "awaiting_resolution") {
     const { ticket_id } = session.payload as { ticket_id: number };
     await supabase.from("comentarios").insert({ ticket_id, autor: name, texto: `Resuelto: ${text}` });
-    await supabase
+    const { data: ticket } = await supabase
       .from("tickets")
       .update({ estado: "resuelto", resolved_at: new Date().toISOString() })
-      .eq("id", ticket_id);
+      .eq("id", ticket_id)
+      .select("reportado_por")
+      .single();
     await clearSession(telegramId);
     await sendMessage(chatId, `✅ Ticket #${ticket_id} marcado como resuelto.`);
+
+    if (ticket?.reportado_por) {
+      await notifyReporter(
+        ticket.reportado_por,
+        telegramId,
+        `✅ <b>Tu ticket #${ticket_id} fue resuelto</b>\n${escapeHtml(text)}`
+      );
+    }
     return;
   }
 
