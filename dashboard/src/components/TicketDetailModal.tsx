@@ -1,14 +1,21 @@
-import { Comentario, Ticket } from "../supabaseClient";
+import { Adjunto, Comentario, Ticket } from "../supabaseClient";
 import { formatGt } from "../timezone";
 
 interface TicketDetailModalProps {
   ticket: Ticket;
   comentarios: Comentario[];
+  adjuntos: Adjunto[];
   loadingComentarios: boolean;
   onClose: () => void;
 }
 
-export function TicketDetailModal({ ticket, comentarios, loadingComentarios, onClose }: TicketDetailModalProps) {
+export function TicketDetailModal({
+  ticket,
+  comentarios,
+  adjuntos,
+  loadingComentarios,
+  onClose,
+}: TicketDetailModalProps) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -44,6 +51,19 @@ export function TicketDetailModal({ ticket, comentarios, loadingComentarios, onC
 
         <h3>Descripción</h3>
         <p className="modal-descripcion">{ticket.descripcion}</p>
+
+        {adjuntos.length > 0 && (
+          <>
+            <h3>Fotos</h3>
+            <div className="modal-fotos">
+              {adjuntos.map((a) => (
+                <a key={a.id} href={a.url} target="_blank" rel="noreferrer">
+                  <img src={a.url} alt={`Adjunto del ticket #${ticket.id}`} loading="lazy" />
+                </a>
+              ))}
+            </div>
+          </>
+        )}
 
         <h3>Historial</h3>
         {loadingComentarios ? (

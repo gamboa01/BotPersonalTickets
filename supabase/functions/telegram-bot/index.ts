@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET")!;
@@ -117,6 +118,91 @@ async function presentDraft(
   await setSession(telegramId, `confirming_${kind}`, { ...extraPayload, draft, draft_message_id: messageId });
 }
 
+const MAX_ADJUNTOS_POR_TICKET = 4;
+
+// deno-lint-ignore no-explicit-any
+async function handlePhoto(chatId: number, telegramId: number, photoSizes: any[]) {
+  const session = await getSession(telegramId);
+  if (!session || session.step !== "awaiting_foto") {
+    await sendMessage(chatId, "Usa /foto <id> primero para indicar a qué ticket adjuntar la imagen.");
+    return;
+  }
+  const { ticket_id } = session.payload as { ticket_id: number };
+
+  const { data: ticket } = await supabase.from("tickets").select("reportado_por").eq("id", ticket_id).maybeSingle();
+  if (!ticket) {
+    await clearSession(telegramId);
+    await sendMessage(chatId, `No existe el ticket #${ticket_id}`);
+    return;
+  }
+
+  const { count } = await supabase
+    .from("adjuntos")
+    .select("*", { count: "exact", head: true })
+    .eq("ticket_id", ticket_id);
+
+  if ((count ?? 0) >= MAX_ADJUNTOS_POR_TICKET) {
+    await clearSession(telegramId);
+    await sendMessage(chatId, `El ticket #${ticket_id} ya tiene el máximo de ${MAX_ADJUNTOS_POR_TICKET} fotos.`);
+    return;
+  }
+
+  // photoSizes viene ordenado de menor a mayor resolución; tomamos la más grande.
+  const largest = photoSizes[photoSizes.length - 1];
+  const fileRes = await tg("getFile", { file_id: largest.file_id });
+  const filePath = fileRes?.result?.file_path;
+  if (!filePath) {
+    await sendMessage(chatId, "No se pudo procesar la foto, intenta de nuevo.");
+    return;
+  }
+
+  const fileResp = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`);
+  const bytes = new Uint8Array(await fileResp.arrayBuffer());
+
+  let jpegBytes: Uint8Array;
+  try {
+    const image = await Image.decode(bytes);
+    if (image.width > 1280) image.resize(1280, Image.RESIZE_AUTO);
+    jpegBytes = await image.encodeJPEG(75);
+  } catch {
+    await sendMessage(chatId, "No pude procesar esa imagen, intenta con otra foto.");
+    return;
+  }
+
+  const storagePath = `${ticket_id}/${crypto.randomUUID()}.jpg`;
+  const { error: uploadError } = await supabase.storage
+    .from("adjuntos")
+    .upload(storagePath, jpegBytes, { contentType: "image/jpeg" });
+
+  if (uploadError) {
+    await sendMessage(chatId, "Ocurrió un error subiendo la foto, intenta de nuevo.");
+    return;
+  }
+
+  const { data: publicUrlData } = supabase.storage.from("adjuntos").getPublicUrl(storagePath);
+  await supabase.from("adjuntos").insert({ ticket_id, url: publicUrlData.publicUrl });
+
+  const newCount = (count ?? 0) + 1;
+  if (newCount >= MAX_ADJUNTOS_POR_TICKET) {
+    await clearSession(telegramId);
+    await sendMessage(
+      chatId,
+      `📎 Foto adjuntada (${newCount}/${MAX_ADJUNTOS_POR_TICKET}). Se alcanzó el máximo para este ticket.`
+    );
+  } else {
+    await sendMessage(
+      chatId,
+      `📎 Foto adjuntada (${newCount}/${MAX_ADJUNTOS_POR_TICKET}). Envía otra o usa /cancelar para terminar.`
+    );
+  }
+
+  if (ticket.reportado_por !== telegramId) {
+    await notifyReporter(ticket.reportado_por, telegramId, `📎 Se adjuntó una foto nueva a tu ticket #${ticket_id}.`);
+  } else if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
+    await sendMessage(Number(ADMIN_CHAT_ID), `📎 Nueva foto adjuntada por el reportante en el ticket #${ticket_id}.`);
+  }
+}
+
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
 
@@ -150,6 +236,7 @@ function helpText(esAdmin: boolean) {
 /nuevo - crear un ticket nuevo
 /mistickets - ver tus tickets abiertos
 /estado &lt;id&gt; - ver detalle de un ticket
+/foto &lt;id&gt; - adjuntar una foto a un ticket (máx. ${MAX_ADJUNTOS_POR_TICKET})
 /cancelar - cancelar la operación en curso
 /ayuda - ver esta ayuda`;
 
@@ -246,6 +333,30 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
           `\n\n<b>Historial:</b>\n` + comentarios.map((c) => `- ${escapeHtml(c.texto)}`).join("\n");
       }
       await sendMessage(chatId, msg);
+      break;
+    }
+
+    case "/foto": {
+      const id = Number(arg);
+      if (!id) {
+        await sendMessage(chatId, "Uso: /foto <id>");
+        break;
+      }
+      const { data: ticket } = await supabase.from("tickets").select("id, reportado_por").eq("id", id).maybeSingle();
+      if (!ticket || (!isAdmin(telegramId) && ticket.reportado_por !== telegramId)) {
+        await sendMessage(chatId, `No existe el ticket #${id}`);
+        break;
+      }
+      const { count } = await supabase
+        .from("adjuntos")
+        .select("*", { count: "exact", head: true })
+        .eq("ticket_id", id);
+      if ((count ?? 0) >= MAX_ADJUNTOS_POR_TICKET) {
+        await sendMessage(chatId, `El ticket #${id} ya tiene el máximo de ${MAX_ADJUNTOS_POR_TICKET} fotos.`);
+        break;
+      }
+      await setSession(telegramId, "awaiting_foto", { ticket_id: id });
+      await sendMessage(chatId, `Envía la foto para adjuntarla al ticket #${id} (como foto normal, no como archivo).`);
       break;
     }
 
@@ -525,6 +636,10 @@ Deno.serve(async (req) => {
       if (!limited) {
         if (text?.startsWith("/")) {
           await handleCommand(chatId, telegramId, name, text);
+        } else if (message.photo) {
+          await handlePhoto(chatId, telegramId, message.photo);
+        } else if (message.document) {
+          await sendMessage(chatId, "📎 Por favor reenvía la imagen como foto normal (no como archivo).");
         } else if (text) {
           await handleFreeText(chatId, telegramId, text);
         }

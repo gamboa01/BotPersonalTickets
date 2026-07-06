@@ -288,6 +288,26 @@ th {
   margin: 0;
 }
 
+.modal-fotos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal-fotos img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: block;
+  transition: border-color 0.15s ease;
+}
+
+.modal-fotos img:hover {
+  border-color: var(--neon-cyan);
+}
+
 .modal-historial {
   list-style: none;
   margin: 0;

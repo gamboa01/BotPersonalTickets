@@ -37,3 +37,10 @@ export interface Comentario {
   texto: string;
   created_at: string;
 }
+
+export interface Adjunto {
+  id: number;
+  ticket_id: number;
+  url: string;
+  created_at: string;
+}

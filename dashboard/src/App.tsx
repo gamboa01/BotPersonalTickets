@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase, Comentario, Ticket } from "./supabaseClient";
+import { Adjunto, supabase, Comentario, Ticket } from "./supabaseClient";
 import { KpiCard } from "./components/KpiCard";
 import { CategoryChart } from "./components/CategoryChart";
 import { TrendChart } from "./components/TrendChart";
@@ -22,6 +22,7 @@ export default function App() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [loadingComentarios, setLoadingComentarios] = useState(false);
+  const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -102,12 +103,12 @@ export default function App() {
   async function openTicket(ticket: Ticket) {
     setSelectedTicket(ticket);
     setLoadingComentarios(true);
-    const { data } = await supabase
-      .from("comentarios")
-      .select("*")
-      .eq("ticket_id", ticket.id)
-      .order("created_at");
-    setComentarios((data ?? []) as Comentario[]);
+    const [{ data: comentariosData }, { data: adjuntosData }] = await Promise.all([
+      supabase.from("comentarios").select("*").eq("ticket_id", ticket.id).order("created_at"),
+      supabase.from("adjuntos").select("*").eq("ticket_id", ticket.id).order("created_at"),
+    ]);
+    setComentarios((comentariosData ?? []) as Comentario[]);
+    setAdjuntos((adjuntosData ?? []) as Adjunto[]);
     setLoadingComentarios(false);
   }
 
@@ -163,6 +164,7 @@ export default function App() {
         <TicketDetailModal
           ticket={selectedTicket}
           comentarios={comentarios}
+          adjuntos={adjuntos}
           loadingComentarios={loadingComentarios}
           onClose={() => setSelectedTicket(null)}
         />
