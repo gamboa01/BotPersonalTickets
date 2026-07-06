@@ -39,6 +39,107 @@ header h1 {
   text-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
 }
 
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.logout-button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.logout-button:hover {
+  border-color: var(--neon-red);
+  color: var(--neon-red);
+}
+
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, #0f1526 0%, #05070d 65%);
+  padding: 24px;
+}
+
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 0 40px rgba(34, 211, 238, 0.08), 0 24px 64px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+}
+
+.login-card h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  color: var(--text);
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+}
+
+.login-card .subtitle {
+  margin: 0 0 20px;
+}
+
+.login-card label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.login-card input {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.login-card input:focus {
+  outline: none;
+  border-color: var(--neon-cyan);
+}
+
+.login-card button {
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--neon-cyan);
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--neon-cyan);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-card button:hover {
+  background: rgba(34, 211, 238, 0.18);
+}
+
+.login-card button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-error {
+  color: var(--neon-red);
+  font-size: 13px;
+  margin: -8px 0 12px;
+}
+
 .subtitle {
   margin: 0 0 24px;
   color: var(--text-muted);

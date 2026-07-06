@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { Adjunto, supabase, Comentario, Ticket } from "./supabaseClient";
 import { KpiCard } from "./components/KpiCard";
 import { CategoryChart } from "./components/CategoryChart";
 import { TrendChart } from "./components/TrendChart";
 import { TicketsTable } from "./components/TicketsTable";
 import { TicketDetailModal } from "./components/TicketDetailModal";
+import { Login } from "./components/Login";
 import { gtDayKey } from "./timezone";
 
 const TREND_DAYS = 14;
@@ -15,6 +17,9 @@ function formatHours(hours: number) {
 }
 
 export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +30,20 @@ export default function App() {
   const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setCheckingSession(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
     let active = true;
 
     async function load() {
@@ -46,7 +65,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [session]);
 
   const stats = useMemo(() => {
     const abiertos = tickets.filter((t) => t.estado === "abierto").length;
@@ -112,14 +131,21 @@ export default function App() {
     setLoadingComentarios(false);
   }
 
+  if (checkingSession) return <div className="status-screen">Cargando...</div>;
+  if (!session) return <Login />;
   if (loading) return <div className="status-screen">Cargando datos...</div>;
   if (error) return <div className="status-screen error">Error al cargar datos: {error}</div>;
 
   return (
     <div className="app">
-      <header>
-        <h1>Dashboard de Tickets TI</h1>
-        <p className="subtitle">Trazabilidad de incidencias reportadas vía Telegram</p>
+      <header className="header-row">
+        <div>
+          <h1>Dashboard de Tickets TI</h1>
+          <p className="subtitle">Trazabilidad de incidencias reportadas vía Telegram</p>
+        </div>
+        <button className="logout-button" onClick={() => supabase.auth.signOut()}>
+          Cerrar sesión
+        </button>
       </header>
 
       <section className="kpi-grid">
