@@ -120,6 +120,12 @@ async function presentDraft(
 
 const MAX_ADJUNTOS_POR_TICKET = 4;
 
+// Deja al usuario listo para mandar una foto sin pedirle un comando aparte.
+async function offerPhoto(chatId: number, telegramId: number, ticketId: number) {
+  await setSession(telegramId, "awaiting_foto", { ticket_id: ticketId });
+  await sendMessage(chatId, "¿Quieres adjuntar una foto? Envíala ahora o usa /cancelar para omitir.");
+}
+
 // deno-lint-ignore no-explicit-any
 async function handlePhoto(chatId: number, telegramId: number, photoSizes: any[]) {
   const session = await getSession(telegramId);
@@ -143,7 +149,7 @@ async function handlePhoto(chatId: number, telegramId: number, photoSizes: any[]
 
   if ((count ?? 0) >= MAX_ADJUNTOS_POR_TICKET) {
     await clearSession(telegramId);
-    await sendMessage(chatId, `El ticket #${ticket_id} ya tiene el máximo de ${MAX_ADJUNTOS_POR_TICKET} fotos.`);
+    await sendMessage(chatId, `Ya se alcanzó el máximo de fotos permitidas para el ticket #${ticket_id}.`);
     return;
   }
 
@@ -182,19 +188,9 @@ async function handlePhoto(chatId: number, telegramId: number, photoSizes: any[]
   const { data: publicUrlData } = supabase.storage.from("adjuntos").getPublicUrl(storagePath);
   await supabase.from("adjuntos").insert({ ticket_id, url: publicUrlData.publicUrl });
 
-  const newCount = (count ?? 0) + 1;
-  if (newCount >= MAX_ADJUNTOS_POR_TICKET) {
-    await clearSession(telegramId);
-    await sendMessage(
-      chatId,
-      `📎 Foto adjuntada (${newCount}/${MAX_ADJUNTOS_POR_TICKET}). Se alcanzó el máximo para este ticket.`
-    );
-  } else {
-    await sendMessage(
-      chatId,
-      `📎 Foto adjuntada (${newCount}/${MAX_ADJUNTOS_POR_TICKET}). Envía otra o usa /cancelar para terminar.`
-    );
-  }
+  // Se queda en "awaiting_foto": puede seguir mandando fotos hasta el tope,
+  // sin que le anunciemos el número exacto (para no invitar a llenarlo siempre).
+  await sendMessage(chatId, "📎 Foto adjuntada. Puedes enviar otra o usar /cancelar para terminar.");
 
   if (ticket.reportado_por !== telegramId) {
     await notifyReporter(ticket.reportado_por, telegramId, `📎 Se adjuntó una foto nueva a tu ticket #${ticket_id}.`);
@@ -236,7 +232,7 @@ function helpText(esAdmin: boolean) {
 /nuevo - crear un ticket nuevo
 /mistickets - ver tus tickets abiertos
 /estado &lt;id&gt; - ver detalle de un ticket
-/foto &lt;id&gt; - adjuntar una foto a un ticket (máx. ${MAX_ADJUNTOS_POR_TICKET})
+/foto &lt;id&gt; - adjuntar una foto a un ticket
 /cancelar - cancelar la operación en curso
 /ayuda - ver esta ayuda`;
 
@@ -352,11 +348,11 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         .select("*", { count: "exact", head: true })
         .eq("ticket_id", id);
       if ((count ?? 0) >= MAX_ADJUNTOS_POR_TICKET) {
-        await sendMessage(chatId, `El ticket #${id} ya tiene el máximo de ${MAX_ADJUNTOS_POR_TICKET} fotos.`);
+        await sendMessage(chatId, `Ya se alcanzó el máximo de fotos permitidas para el ticket #${id}.`);
         break;
       }
       await setSession(telegramId, "awaiting_foto", { ticket_id: id });
-      await sendMessage(chatId, `Envía la foto para adjuntarla al ticket #${id} (como foto normal, no como archivo).`);
+      await sendMessage(chatId, `Envía la foto para adjuntarla al ticket #${id}.`);
       break;
     }
 
@@ -555,6 +551,7 @@ async function handleCallback(callback: any) {
           )}\n${escapeHtml(draft)}`
         );
       }
+      await offerPhoto(chatId, telegramId, ticket.id);
       return;
     }
 
@@ -576,6 +573,7 @@ async function handleCallback(callback: any) {
           `🔧 <b>Actualización de tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
         );
       }
+      await offerPhoto(chatId, telegramId, ticket_id);
       return;
     }
 
@@ -597,6 +595,7 @@ async function handleCallback(callback: any) {
           `✅ <b>Tu ticket #${ticket_id} fue resuelto</b>\n${escapeHtml(draft)}`
         );
       }
+      await offerPhoto(chatId, telegramId, ticket_id);
       return;
     }
   }
