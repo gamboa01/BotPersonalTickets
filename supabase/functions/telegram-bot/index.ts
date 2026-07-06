@@ -47,12 +47,25 @@ function formatGt(iso: string) {
   });
 }
 
+const SESSION_TIMEOUT_MS = 30 * 60_000;
+
+// Si la sesión lleva más de 30 min sin actividad, se descarta: evita que un
+// mensaje escrito días después se interprete con una categoría/prioridad ya vieja.
 async function getSession(telegramId: number) {
   const { data } = await supabase
     .from("bot_sessions")
     .select("*")
     .eq("telegram_id", telegramId)
     .maybeSingle();
+
+  if (!data) return null;
+
+  const age = Date.now() - new Date(data.updated_at).getTime();
+  if (age > SESSION_TIMEOUT_MS) {
+    await supabase.from("bot_sessions").delete().eq("telegram_id", telegramId);
+    return null;
+  }
+
   return data;
 }
 
@@ -77,12 +90,13 @@ async function notifyReporter(reportedBy: number, actorTelegramId: number, text:
   await sendMessage(Number(reportedBy), text);
 }
 
-type DraftKind = "description" | "seguimiento" | "resolution";
+type DraftKind = "description" | "seguimiento" | "resolution" | "reapertura";
 
 const DRAFT_LABELS: Record<DraftKind, string> = {
   description: "Descripción del ticket",
   seguimiento: "Comentario de seguimiento",
   resolution: "Nota de resolución",
+  reapertura: "Motivo de reapertura",
 };
 
 // Telegram no permite prellenar el texto que escribe un usuario, así que en
@@ -233,6 +247,7 @@ function helpText(esAdmin: boolean) {
 /mistickets - ver tus tickets abiertos
 /estado &lt;id&gt; - ver detalle de un ticket
 /foto &lt;id&gt; - adjuntar una foto a un ticket
+/reabrir &lt;id&gt; - reabrir un ticket resuelto o cerrado
 /cancelar - cancelar la operación en curso
 /ayuda - ver esta ayuda`;
 
@@ -433,6 +448,30 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
     }
 
+    case "/reabrir": {
+      const id = Number(arg);
+      if (!id) {
+        await sendMessage(chatId, "Uso: /reabrir <id>");
+        break;
+      }
+      const { data: ticket } = await supabase
+        .from("tickets")
+        .select("id, estado, reportado_por")
+        .eq("id", id)
+        .maybeSingle();
+      if (!ticket || (!isAdmin(telegramId) && ticket.reportado_por !== telegramId)) {
+        await sendMessage(chatId, `No existe el ticket #${id}`);
+        break;
+      }
+      if (ticket.estado !== "resuelto" && ticket.estado !== "cerrado") {
+        await sendMessage(chatId, `El ticket #${id} no está resuelto ni cerrado.`);
+        break;
+      }
+      await setSession(telegramId, "awaiting_reapertura", { ticket_id: id });
+      await sendMessage(chatId, `Escribe el motivo para reabrir el ticket #${id}:`);
+      break;
+    }
+
     case "/cancelar": {
       const session = await getSession(telegramId);
       await clearSession(telegramId);
@@ -482,6 +521,12 @@ async function handleFreeText(chatId: number, telegramId: number, text: string) 
     return;
   }
 
+  if (session.step === "awaiting_reapertura" || session.step === "confirming_reapertura") {
+    const { ticket_id, draft_message_id } = session.payload as { ticket_id: number; draft_message_id?: number };
+    await presentDraft(chatId, telegramId, "reapertura", text, { ticket_id }, draft_message_id);
+    return;
+  }
+
   await sendMessage(chatId, "No entendí, usa /ayuda para ver comandos.");
 }
 
@@ -525,10 +570,14 @@ async function handleCallback(callback: any) {
   if (data.startsWith("pri:")) {
     const prioridad = data.split(":")[1];
     const session = await getSession(telegramId);
+    if (!session) {
+      await sendMessage(chatId, "Esa selección ya expiró, usa /nuevo para empezar de nuevo.");
+      return;
+    }
     // deno-lint-ignore no-explicit-any
-    const categoria_id = (session?.payload as any)?.categoria_id;
+    const categoria_id = (session.payload as any)?.categoria_id;
     // deno-lint-ignore no-explicit-any
-    const reportado_por_nombre = (session?.payload as any)?.reportado_por_nombre;
+    const reportado_por_nombre = (session.payload as any)?.reportado_por_nombre;
     await setSession(telegramId, "awaiting_description", { categoria_id, prioridad, reportado_por_nombre });
     await sendMessage(chatId, "Describe el problema:");
     return;
@@ -636,6 +685,35 @@ async function handleCallback(callback: any) {
           telegramId,
           `✅ <b>Tu ticket #${ticket_id} fue resuelto</b>\n${escapeHtml(draft)}`
         );
+      }
+      await offerPhoto(chatId, telegramId, ticket_id);
+      return;
+    }
+
+    if (kind === "reapertura") {
+      const { ticket_id } = payload;
+      await supabase.from("comentarios").insert({ ticket_id, autor: name, texto: `Reabierto: ${draft}` });
+      const { data: ticket } = await supabase
+        .from("tickets")
+        .update({ estado: "abierto", resolved_at: null })
+        .eq("id", ticket_id)
+        .select("reportado_por")
+        .single();
+      await sendMessage(chatId, `🔁 Ticket #${ticket_id} reabierto.`);
+
+      if (ticket?.reportado_por) {
+        if (ticket.reportado_por !== telegramId) {
+          await notifyReporter(
+            ticket.reportado_por,
+            telegramId,
+            `🔁 <b>Tu ticket #${ticket_id} fue reabierto</b>\n${escapeHtml(draft)}`
+          );
+        } else if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
+          await sendMessage(
+            Number(ADMIN_CHAT_ID),
+            `🔁 <b>Ticket #${ticket_id} reabierto por quien lo reportó</b>\n${escapeHtml(draft)}`
+          );
+        }
       }
       await offerPhoto(chatId, telegramId, ticket_id);
       return;
