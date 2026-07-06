@@ -238,6 +238,7 @@ function helpText(esAdmin: boolean) {
 
   if (esAdmin) {
     help += `
+/registrar &lt;nombre&gt; - crear un ticket a nombre de alguien que no usa el bot
 /seguimiento &lt;id&gt; - agregar un comentario de seguimiento (pasa a en progreso)
 /resolver &lt;id&gt; - marcar un ticket como resuelto`;
   }
@@ -273,10 +274,35 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
     }
 
+    case "/registrar": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para registrar tickets a nombre de otra persona.");
+        break;
+      }
+      if (!arg) {
+        await sendMessage(chatId, "Uso: /registrar <nombre de la persona>");
+        break;
+      }
+      const { data: categoriasRaw } = await supabase.from("categorias").select("*").order("id");
+      const categorias = [...(categoriasRaw ?? [])].sort((a, b) =>
+        a.nombre === "Otros" ? 1 : b.nombre === "Otros" ? -1 : 0
+      );
+      await setSession(telegramId, "awaiting_category", { reportado_por_nombre: arg });
+      await sendMessage(chatId, `Selecciona una categoría para el ticket de ${escapeHtml(arg)}:`, {
+        reply_markup: {
+          inline_keyboard: [
+            ...categorias.map((c) => [{ text: c.nombre, callback_data: `cat:${c.id}` }]),
+            [{ text: "❌ Cancelar", callback_data: "cancel" }],
+          ],
+        },
+      });
+      break;
+    }
+
     case "/mistickets": {
       const { data: tickets } = await supabase
         .from("tickets")
-        .select("id, descripcion, prioridad, estado")
+        .select("id, descripcion, prioridad, estado, reportado_por_nombre")
         .eq("reportado_por", telegramId)
         .neq("estado", "cerrado")
         .order("created_at", { ascending: false });
@@ -286,7 +312,10 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         break;
       }
       const lines = tickets.map(
-        (t) => `#${t.id} [${t.estado}] (${t.prioridad}) - ${escapeHtml(t.descripcion.slice(0, 60))}`
+        (t) =>
+          `#${t.id} [${t.estado}] (${t.prioridad}) - ${escapeHtml(t.reportado_por_nombre ?? "")}: ${escapeHtml(
+            t.descripcion.slice(0, 60)
+          )}`
       );
       await sendMessage(chatId, lines.join("\n"));
       break;
@@ -424,12 +453,20 @@ async function handleFreeText(chatId: number, telegramId: number, text: string) 
   }
 
   if (session.step === "awaiting_description" || session.step === "confirming_description") {
-    const { categoria_id, prioridad, draft_message_id } = session.payload as {
+    const { categoria_id, prioridad, draft_message_id, reportado_por_nombre } = session.payload as {
       categoria_id: number;
       prioridad: string;
       draft_message_id?: number;
+      reportado_por_nombre?: string;
     };
-    await presentDraft(chatId, telegramId, "description", text, { categoria_id, prioridad }, draft_message_id);
+    await presentDraft(
+      chatId,
+      telegramId,
+      "description",
+      text,
+      { categoria_id, prioridad, reportado_por_nombre },
+      draft_message_id
+    );
     return;
   }
 
@@ -463,7 +500,10 @@ async function handleCallback(callback: any) {
 
   if (data.startsWith("cat:")) {
     const categoria_id = Number(data.split(":")[1]);
-    await setSession(telegramId, "awaiting_priority", { categoria_id });
+    const session = await getSession(telegramId);
+    // deno-lint-ignore no-explicit-any
+    const reportado_por_nombre = (session?.payload as any)?.reportado_por_nombre;
+    await setSession(telegramId, "awaiting_priority", { categoria_id, reportado_por_nombre });
     await sendMessage(chatId, "Selecciona la prioridad:", {
       reply_markup: {
         inline_keyboard: [
@@ -487,7 +527,9 @@ async function handleCallback(callback: any) {
     const session = await getSession(telegramId);
     // deno-lint-ignore no-explicit-any
     const categoria_id = (session?.payload as any)?.categoria_id;
-    await setSession(telegramId, "awaiting_description", { categoria_id, prioridad });
+    // deno-lint-ignore no-explicit-any
+    const reportado_por_nombre = (session?.payload as any)?.reportado_por_nombre;
+    await setSession(telegramId, "awaiting_description", { categoria_id, prioridad, reportado_por_nombre });
     await sendMessage(chatId, "Describe el problema:");
     return;
   }
@@ -524,7 +566,7 @@ async function handleCallback(callback: any) {
     }
 
     if (kind === "description") {
-      const { categoria_id, prioridad } = payload;
+      const { categoria_id, prioridad, reportado_por_nombre } = payload;
       const { data: ticket, error } = await supabase
         .from("tickets")
         .insert({
@@ -532,7 +574,7 @@ async function handleCallback(callback: any) {
           categoria_id,
           prioridad,
           reportado_por: telegramId,
-          reportado_por_nombre: name,
+          reportado_por_nombre: reportado_por_nombre || name,
         })
         .select()
         .single();
