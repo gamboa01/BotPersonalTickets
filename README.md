@@ -92,11 +92,24 @@ Prueba escribiéndole a tu bot `/start` o `/nuevo` en Telegram.
 
 ## Flujo del bot
 
-- `/nuevo` — crea un ticket: selecciona categoría y prioridad con botones, luego pide la descripción.
-- `/mistickets` — lista tus tickets abiertos o en progreso.
-- `/estado <id>` — detalle de un ticket y su historial.
-- `/resolver <id>` — pide una nota y marca el ticket como resuelto.
+Disponibles para cualquier usuario:
+
+- `/nuevo` — crea un ticket: selecciona categoría y prioridad con botones, luego pide la descripción (con vista previa editable antes de enviar).
+- `/abiertos` — lista tus tickets abiertos o en progreso.
+- `/resueltos` — lista tus últimos tickets resueltos.
+- `/estado <id>` — detalle de un ticket y su historial (solo si es tuyo o eres el admin).
+- `/foto <id>` — adjunta una foto a un ticket (máx. 4).
+- `/reabrir <id>` — reabre un ticket resuelto o cerrado si el problema persiste.
+- `/cancelar` — cancela la operación en curso.
 - `/ayuda` — muestra los comandos disponibles.
+
+Solo para el admin (`ADMIN_CHAT_ID`):
+
+- `/registrar <nombre>` — crea un ticket a nombre de alguien que reportó por otro medio (WhatsApp, en persona, etc.), sin usar el bot.
+- `/seguimiento <id>` — agrega un comentario de seguimiento y pasa el ticket a "en progreso"; notifica a quien lo reportó.
+- `/resolver <id>` — marca el ticket como resuelto; notifica a quien lo reportó.
+
+Después de crear, dar seguimiento, resolver o reabrir un ticket, el bot ofrece adjuntar una foto en el mismo momento, sin necesidad de usar `/foto` aparte.
 
 ## Notas de seguridad
 

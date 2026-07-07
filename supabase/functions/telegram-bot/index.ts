@@ -244,7 +244,8 @@ async function isRateLimited(chatId: number, telegramId: number): Promise<boolea
 function helpText(esAdmin: boolean) {
   let help = `<b>Comandos disponibles</b>
 /nuevo - crear un ticket nuevo
-/mistickets - ver tus tickets abiertos
+/abiertos - ver tus tickets abiertos o en progreso
+/resueltos - ver tus tickets resueltos
 /estado &lt;id&gt; - ver detalle de un ticket
 /foto &lt;id&gt; - adjuntar una foto a un ticket
 /reabrir &lt;id&gt; - reabrir un ticket resuelto o cerrado
@@ -314,16 +315,39 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
     }
 
-    case "/mistickets": {
+    case "/abiertos": {
       const { data: tickets } = await supabase
         .from("tickets")
         .select("id, descripcion, prioridad, estado, reportado_por_nombre")
         .eq("reportado_por", telegramId)
-        .neq("estado", "cerrado")
+        .in("estado", ["abierto", "en_progreso"])
         .order("created_at", { ascending: false });
 
       if (!tickets?.length) {
         await sendMessage(chatId, "No tienes tickets abiertos. Usa /nuevo para crear uno.");
+        break;
+      }
+      const lines = tickets.map(
+        (t) =>
+          `#${t.id} [${t.estado}] (${t.prioridad}) - ${escapeHtml(t.reportado_por_nombre ?? "")}: ${escapeHtml(
+            t.descripcion.slice(0, 60)
+          )}`
+      );
+      await sendMessage(chatId, lines.join("\n"));
+      break;
+    }
+
+    case "/resueltos": {
+      const { data: tickets } = await supabase
+        .from("tickets")
+        .select("id, descripcion, prioridad, estado, reportado_por_nombre")
+        .eq("reportado_por", telegramId)
+        .in("estado", ["resuelto", "cerrado"])
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (!tickets?.length) {
+        await sendMessage(chatId, "Todavía no tienes tickets resueltos.");
         break;
       }
       const lines = tickets.map(
