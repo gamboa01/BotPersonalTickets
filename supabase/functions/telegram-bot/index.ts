@@ -137,7 +137,16 @@ const MAX_ADJUNTOS_POR_TICKET = 4;
 // Deja al usuario listo para mandar una foto sin pedirle un comando aparte.
 async function offerPhoto(chatId: number, telegramId: number, ticketId: number) {
   await setSession(telegramId, "awaiting_foto", { ticket_id: ticketId });
-  await sendMessage(chatId, "¿Quieres adjuntar una foto? Envíala ahora o usa /cancelar para omitir.");
+  await sendMessage(chatId, "¿Quieres adjuntar una foto?", {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "✅ Sí", callback_data: "foto:si" },
+          { text: "🚫 No", callback_data: "foto:no" },
+        ],
+      ],
+    },
+  });
 }
 
 // deno-lint-ignore no-explicit-any
@@ -564,6 +573,17 @@ async function handleCallback(callback: any) {
   if (data === "cancel") {
     await clearSession(telegramId);
     await sendMessage(chatId, "❌ Operación cancelada.");
+    return;
+  }
+
+  if (data === "foto:no") {
+    await clearSession(telegramId);
+    await sendMessage(chatId, "👍 Listo, sin foto.");
+    return;
+  }
+
+  if (data === "foto:si") {
+    await sendMessage(chatId, "Envía la foto ahora.");
     return;
   }
 
