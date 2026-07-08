@@ -47,6 +47,21 @@ function formatGt(iso: string) {
   });
 }
 
+// Arma los botones de categoría de a 2 por fila, para no tener una lista
+// larguísima de una sola columna cuando hay muchas categorías.
+// deno-lint-ignore no-explicit-any
+function categoryRows(categorias: any[]) {
+  const rows = [];
+  for (let i = 0; i < categorias.length; i += 2) {
+    rows.push(
+      categorias
+        .slice(i, i + 2)
+        .map((c) => ({ text: c.nombre, callback_data: `cat:${c.id}` }))
+    );
+  }
+  return rows;
+}
+
 const SESSION_TIMEOUT_MS = 30 * 60_000;
 
 // Si la sesión lleva más de 30 min sin actividad, se descarta: evita que un
@@ -291,7 +306,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       await sendMessage(chatId, "Selecciona una categoría:", {
         reply_markup: {
           inline_keyboard: [
-            ...categorias.map((c) => [{ text: c.nombre, callback_data: `cat:${c.id}` }]),
+            ...categoryRows(categorias),
             [{ text: "❌ Cancelar", callback_data: "cancel" }],
           ],
         },
@@ -316,7 +331,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       await sendMessage(chatId, `Selecciona una categoría para el ticket de ${escapeHtml(arg)}:`, {
         reply_markup: {
           inline_keyboard: [
-            ...categorias.map((c) => [{ text: c.nombre, callback_data: `cat:${c.id}` }]),
+            ...categoryRows(categorias),
             [{ text: "❌ Cancelar", callback_data: "cancel" }],
           ],
         },
