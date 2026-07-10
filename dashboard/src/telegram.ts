@@ -1,8 +1,10 @@
 const BOT_USERNAME = "GGTicketsBot";
 
-// Abre el bot con el comando correspondiente ya listo para enviar, en vez de
-// que el admin tenga que copiar el ID y escribirlo a mano en Telegram.
+// Usamos el dominio de Telegram Web (no t.me) porque es el mismo origen donde
+// ya tienes sesión iniciada en el navegador: t.me no puede ver esa sesión (es
+// un dominio distinto) y por eso muestra la pantalla genérica de "Start Bot"
+// en vez de saltar directo a tu chat.
 export function botDeepLink(accion: string, ticketId?: number) {
   const payload = ticketId ? `${accion}_${ticketId}` : accion;
-  return `https://t.me/${BOT_USERNAME}?start=${payload}`;
+  return `https://web.telegram.org/k/#@${BOT_USERNAME}?start=${payload}`;
 }
