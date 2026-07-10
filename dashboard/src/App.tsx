@@ -8,6 +8,7 @@ import { TicketsTable } from "./components/TicketsTable";
 import { TicketDetailModal } from "./components/TicketDetailModal";
 import { Login } from "./components/Login";
 import { gtDayKey } from "./timezone";
+import { botDeepLink } from "./telegram";
 
 const TREND_DAYS = 14;
 
@@ -143,9 +144,14 @@ export default function App() {
           <h1>Dashboard de Tickets TI</h1>
           <p className="subtitle">Trazabilidad de incidencias reportadas vía Telegram</p>
         </div>
-        <button className="logout-button" onClick={() => supabase.auth.signOut()}>
-          Cerrar sesión
-        </button>
+        <div className="header-actions">
+          <a className="action-button action-button-primary" href={botDeepLink("nuevo")} target="_blank" rel="noreferrer">
+            + Nuevo ticket
+          </a>
+          <button className="logout-button" onClick={() => supabase.auth.signOut()}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <section className="kpi-grid">

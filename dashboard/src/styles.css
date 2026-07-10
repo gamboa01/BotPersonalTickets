@@ -61,6 +61,48 @@ header h1 {
   color: var(--neon-red);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 20px;
+}
+
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.action-button:hover {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+}
+
+.action-button-primary {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.action-button-primary:hover {
+  background: rgba(34, 211, 238, 0.18);
+}
+
 .login-screen {
   min-height: 100vh;
   display: flex;

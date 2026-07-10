@@ -291,7 +291,23 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
   const arg = rest.join(" ");
 
   switch (cmd) {
-    case "/start":
+    case "/start": {
+      // Deep link desde el dashboard: t.me/<bot>?start=resolver_42 llega aquí
+      // como "/start resolver_42". Lo traducimos al comando real (/resolver 42).
+      const deepLink = arg.match(/^(resolver|seguimiento|reabrir|foto|estado)_(\d+)$/);
+      if (deepLink) {
+        const [, accion, id] = deepLink;
+        await handleCommand(chatId, telegramId, name, `/${accion} ${id}`);
+        break;
+      }
+      if (arg === "nuevo") {
+        await handleCommand(chatId, telegramId, name, "/nuevo");
+        break;
+      }
+      await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
+      break;
+    }
+
     case "/ayuda":
       await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
       break;

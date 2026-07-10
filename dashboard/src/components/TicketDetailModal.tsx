@@ -1,5 +1,6 @@
 import { Adjunto, Comentario, Ticket } from "../supabaseClient";
 import { formatGt } from "../timezone";
+import { botDeepLink } from "../telegram";
 
 interface TicketDetailModalProps {
   ticket: Ticket;
@@ -48,6 +49,32 @@ export function TicketDetailModal({
             </>
           )}
         </dl>
+
+        <div className="modal-actions">
+          {(ticket.estado === "abierto" || ticket.estado === "en_progreso") && (
+            <>
+              <a className="action-button" href={botDeepLink("seguimiento", ticket.id)} target="_blank" rel="noreferrer">
+                🔧 Dar seguimiento
+              </a>
+              <a
+                className="action-button action-button-primary"
+                href={botDeepLink("resolver", ticket.id)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                ✅ Resolver
+              </a>
+            </>
+          )}
+          {(ticket.estado === "resuelto" || ticket.estado === "cerrado") && (
+            <a className="action-button" href={botDeepLink("reabrir", ticket.id)} target="_blank" rel="noreferrer">
+              🔁 Reabrir
+            </a>
+          )}
+          <a className="action-button" href={botDeepLink("foto", ticket.id)} target="_blank" rel="noreferrer">
+            📎 Adjuntar foto
+          </a>
+        </div>
 
         <h3>Descripción</h3>
         <p className="modal-descripcion">{ticket.descripcion}</p>
