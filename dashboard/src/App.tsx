@@ -63,8 +63,19 @@ export default function App() {
     }
 
     load();
+
+    // Vuelve a cargar la lista en cuanto el bot inserta o actualiza un
+    // ticket, en vez de esperar a que alguien recargue la página a mano.
+    const channel = supabase
+      .channel("tickets-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tickets" }, () => {
+        load();
+      })
+      .subscribe();
+
     return () => {
       active = false;
+      supabase.removeChannel(channel);
     };
   }, [session]);
 
