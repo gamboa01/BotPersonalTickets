@@ -1,14 +1,10 @@
 const BOT_USERNAME = "GGTicketsBot";
 
-// Usamos el dominio de Telegram Web (no t.me) porque es el mismo origen donde
-// ya tienes sesión iniciada en el navegador: t.me no puede ver esa sesión (es
-// un dominio distinto) y por eso mostraba la pantalla genérica de "Start Bot".
-//
-// Prellenamos el comando real (ej. "/resolver 42") en el cuadro de texto en
-// vez de usar "?start=": Telegram Web no ejecuta ese parámetro solo, así que
-// abría el chat correcto pero no mandaba nada. Con "?text=" el mensaje queda
-// listo en el cuadro — solo falta un Enter/Enviar.
+// Telegram Web (por navegador) no ejecuta "?start=" ni "?text=" de forma
+// confiable — probamos ambos y ninguno mandaba el comando solo. El esquema
+// tg:// sí funciona como se espera, pero requiere la app de escritorio
+// instalada (el sistema operativo la asocia como manejador de tg://).
 export function botDeepLink(accion: string, ticketId?: number) {
-  const command = ticketId ? `/${accion} ${ticketId}` : `/${accion}`;
-  return `https://web.telegram.org/k/#@${BOT_USERNAME}?text=${encodeURIComponent(command)}`;
+  const payload = ticketId ? `${accion}_${ticketId}` : accion;
+  return `tg://resolve?domain=${BOT_USERNAME}&start=${payload}`;
 }
