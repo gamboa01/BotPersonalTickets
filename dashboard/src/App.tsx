@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Adjunto, supabase, Comentario, Ticket } from "./supabaseClient";
 import { KpiCard } from "./components/KpiCard";
-import { CategoryChart } from "./components/CategoryChart";
+import { RankedBarChart } from "./components/RankedBarChart";
 import { TrendChart } from "./components/TrendChart";
 import { TicketsTable } from "./components/TicketsTable";
 import { TicketDetailModal } from "./components/TicketDetailModal";
@@ -106,6 +106,18 @@ export default function App() {
     return Array.from(counts.entries()).map(([nombre, total]) => ({ nombre, total }));
   }, [tickets]);
 
+  const reporterData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of tickets) {
+      const nombre = t.reportado_por_nombre ?? "Sin nombre";
+      counts.set(nombre, (counts.get(nombre) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([nombre, total]) => ({ nombre, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [tickets]);
+
   const trendData = useMemo(() => {
     const days: { fecha: string; creados: number; resueltos: number }[] = [];
 
@@ -183,11 +195,15 @@ export default function App() {
       <section className="chart-grid">
         <div className="panel">
           <h2>Tickets por categoría</h2>
-          <CategoryChart data={categoryData} />
+          <RankedBarChart data={categoryData} />
         </div>
         <div className="panel">
           <h2>Tendencia (últimos {TREND_DAYS} días)</h2>
           <TrendChart data={trendData} />
+        </div>
+        <div className="panel">
+          <h2>Tickets por persona (top 10)</h2>
+          <RankedBarChart data={reporterData} />
         </div>
       </section>
 

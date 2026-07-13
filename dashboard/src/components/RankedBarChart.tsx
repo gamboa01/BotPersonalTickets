@@ -1,10 +1,10 @@
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-interface CategoryChartProps {
+interface RankedBarChartProps {
   data: { nombre: string; total: number }[];
 }
 
-export function CategoryChart({ data }: CategoryChartProps) {
+export function RankedBarChart({ data }: RankedBarChartProps) {
   if (data.length === 0) {
     return <p className="empty-state">Sin datos todavía.</p>;
   }
