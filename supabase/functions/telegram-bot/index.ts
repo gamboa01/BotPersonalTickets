@@ -38,6 +38,16 @@ function escapeHtml(text: string) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Contraparte de registrarDeepLink() en el dashboard: el parámetro start de
+// Telegram solo acepta [A-Za-z0-9_-], así que el nombre viaja en base64url.
+function base64UrlDecode(value: string): string {
+  const padLength = (4 - (value.length % 4)) % 4;
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat(padLength);
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 const GT_TIMEZONE = "America/Guatemala";
 function formatGt(iso: string) {
   return new Date(iso).toLocaleString("es-GT", {
@@ -302,6 +312,15 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       }
       if (arg === "nuevo") {
         await handleCommand(chatId, telegramId, name, "/nuevo");
+        break;
+      }
+      if (arg.startsWith("registrar_")) {
+        try {
+          const personName = base64UrlDecode(arg.slice("registrar_".length));
+          await handleCommand(chatId, telegramId, name, `/registrar ${personName}`);
+        } catch {
+          await sendMessage(chatId, "No se pudo leer el nombre. Usa /registrar <nombre> manualmente.");
+        }
         break;
       }
       await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);

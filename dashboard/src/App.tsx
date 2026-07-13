@@ -7,6 +7,7 @@ import { TrendChart } from "./components/TrendChart";
 import { TicketsTable } from "./components/TicketsTable";
 import { TicketDetailModal } from "./components/TicketDetailModal";
 import { Login } from "./components/Login";
+import { RegistrarTicket } from "./components/RegistrarTicket";
 import { gtDayKey } from "./timezone";
 import { botDeepLink } from "./telegram";
 
@@ -159,6 +160,7 @@ export default function App() {
           <a className="action-button action-button-primary" href={botDeepLink("nuevo")} target="_blank" rel="noreferrer">
             + Nuevo ticket
           </a>
+          <RegistrarTicket />
           <button className="logout-button" onClick={() => supabase.auth.signOut()}>
             Cerrar sesión
           </button>
