@@ -115,13 +115,14 @@ async function notifyReporter(reportedBy: number, actorTelegramId: number, text:
   await sendMessage(Number(reportedBy), text);
 }
 
-type DraftKind = "description" | "seguimiento" | "resolution" | "reapertura";
+type DraftKind = "description" | "seguimiento" | "resolution" | "reapertura" | "comentario";
 
 const DRAFT_LABELS: Record<DraftKind, string> = {
   description: "Descripción del ticket",
   seguimiento: "Comentario de seguimiento",
   resolution: "Nota de resolución",
   reapertura: "Motivo de reapertura",
+  comentario: "Comentario",
 };
 
 // Telegram no permite prellenar el texto que escribe un usuario, así que en
@@ -281,6 +282,7 @@ function helpText(esAdmin: boolean) {
 /abiertos - ver tus tickets abiertos o en progreso
 /resueltos - ver tus tickets resueltos
 /estado &lt;id&gt; - ver detalle de un ticket
+/comentar &lt;id&gt; - agregar un comentario al historial (sin cambiar el estado)
 /foto &lt;id&gt; - adjuntar una foto a un ticket
 /reabrir &lt;id&gt; - reabrir un ticket resuelto o cerrado
 /cancelar - cancelar la operación en curso
@@ -459,6 +461,26 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
     }
 
+    case "/comentar": {
+      const id = Number(arg);
+      if (!id) {
+        await sendMessage(chatId, "Uso: /comentar <id>");
+        break;
+      }
+      const { data: ticket } = await supabase
+        .from("tickets")
+        .select("id, reportado_por")
+        .eq("id", id)
+        .maybeSingle();
+      if (!ticket || (!isAdmin(telegramId) && ticket.reportado_por !== telegramId)) {
+        await sendMessage(chatId, `No existe el ticket #${id}`);
+        break;
+      }
+      await setSession(telegramId, "awaiting_comentario", { ticket_id: id });
+      await sendMessage(chatId, `Escribe tu comentario para el ticket #${id}:`);
+      break;
+    }
+
     case "/foto": {
       const id = Number(arg);
       if (!id) {
@@ -607,6 +629,12 @@ async function handleFreeText(chatId: number, telegramId: number, text: string) 
   if (session.step === "awaiting_reapertura" || session.step === "confirming_reapertura") {
     const { ticket_id, draft_message_id } = session.payload as { ticket_id: number; draft_message_id?: number };
     await presentDraft(chatId, telegramId, "reapertura", text, { ticket_id }, draft_message_id);
+    return;
+  }
+
+  if (session.step === "awaiting_comentario" || session.step === "confirming_comentario") {
+    const { ticket_id, draft_message_id } = session.payload as { ticket_id: number; draft_message_id?: number };
+    await presentDraft(chatId, telegramId, "comentario", text, { ticket_id }, draft_message_id);
     return;
   }
 
@@ -806,6 +834,34 @@ async function handleCallback(callback: any) {
           await sendMessage(
             Number(ADMIN_CHAT_ID),
             `🔁 <b>Ticket #${ticket_id} reabierto por quien lo reportó</b>\n${escapeHtml(draft)}`
+          );
+        }
+      }
+      await offerPhoto(chatId, telegramId, ticket_id);
+      return;
+    }
+
+    if (kind === "comentario") {
+      const { ticket_id } = payload;
+      await supabase.from("comentarios").insert({ ticket_id, autor: name, texto: `Comentario: ${draft}` });
+      const { data: ticket } = await supabase
+        .from("tickets")
+        .select("reportado_por")
+        .eq("id", ticket_id)
+        .maybeSingle();
+      await sendMessage(chatId, `✅ Comentario agregado al ticket #${ticket_id}.`);
+
+      if (ticket?.reportado_por) {
+        if (ticket.reportado_por !== telegramId) {
+          await notifyReporter(
+            ticket.reportado_por,
+            telegramId,
+            `💬 <b>Nuevo comentario en tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
+          );
+        } else if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
+          await sendMessage(
+            Number(ADMIN_CHAT_ID),
+            `💬 <b>Comentario de ${escapeHtml(name)} en el ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
           );
         }
       }
