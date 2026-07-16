@@ -24,6 +24,13 @@ function sendMessage(chatId: number, text: string, extra: Record<string, unknown
   return tg("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", ...extra });
 }
 
+// Reenvía la foto usando el mismo file_id que ya tiene Telegram — no hace
+// falta volver a descargarla ni subirla, un bot puede reusar un file_id
+// que ya recibió para mandarlo a cualquier otro chat.
+function sendPhoto(chatId: number, fileId: string, caption: string) {
+  return tg("sendPhoto", { chat_id: chatId, photo: fileId, caption, parse_mode: "HTML" });
+}
+
 function editMessageText(chatId: number, messageId: number, text: string, extra: Record<string, unknown> = {}) {
   return tg("editMessageText", { chat_id: chatId, message_id: messageId, text, parse_mode: "HTML", ...extra });
 }
@@ -176,7 +183,7 @@ async function offerPhoto(chatId: number, telegramId: number, ticketId: number) 
 }
 
 // deno-lint-ignore no-explicit-any
-async function handlePhoto(chatId: number, telegramId: number, photoSizes: any[]) {
+async function handlePhoto(chatId: number, telegramId: number, name: string, photoSizes: any[]) {
   const session = await getSession(telegramId);
   if (!session || session.step !== "awaiting_foto") {
     await sendMessage(chatId, "Usa /foto <id> primero para indicar a qué ticket adjuntar la imagen.");
@@ -242,9 +249,13 @@ async function handlePhoto(chatId: number, telegramId: number, photoSizes: any[]
   await sendMessage(chatId, "📎 Foto adjuntada. Puedes enviar otra o usar /cancelar para terminar.");
 
   if (ticket.reportado_por !== telegramId) {
-    await notifyReporter(ticket.reportado_por, telegramId, `📎 Se adjuntó una foto nueva a tu ticket #${ticket_id}.`);
+    await sendPhoto(Number(ticket.reportado_por), largest.file_id, `📎 Foto nueva en tu ticket #${ticket_id}`);
   } else if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
-    await sendMessage(Number(ADMIN_CHAT_ID), `📎 Nueva foto adjuntada por el reportante en el ticket #${ticket_id}.`);
+    await sendPhoto(
+      Number(ADMIN_CHAT_ID),
+      largest.file_id,
+      `📎 Foto nueva en el ticket #${ticket_id} (de ${escapeHtml(name)})`
+    );
   }
 }
 
@@ -906,7 +917,7 @@ Deno.serve(async (req) => {
         if (text?.startsWith("/")) {
           await handleCommand(chatId, telegramId, name, text);
         } else if (message.photo) {
-          await handlePhoto(chatId, telegramId, message.photo);
+          await handlePhoto(chatId, telegramId, name, message.photo);
         } else if (message.document) {
           await sendMessage(chatId, "📎 Por favor reenvía la imagen como foto normal (no como archivo).");
         } else if (text) {
