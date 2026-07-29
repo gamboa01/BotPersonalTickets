@@ -8,6 +8,7 @@ import { TicketsTable } from "./components/TicketsTable";
 import { TicketDetailModal } from "./components/TicketDetailModal";
 import { Login } from "./components/Login";
 import { RegistrarTicket } from "./components/RegistrarTicket";
+import { DocsView } from "./components/DocsView";
 import { gtDayKey } from "./timezone";
 import { botDeepLink } from "./telegram";
 
@@ -21,6 +22,7 @@ function formatHours(hours: number) {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [view, setView] = useState<"tickets" | "docs">("tickets");
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,68 +169,91 @@ export default function App() {
         <div>
           <h1>Dashboard de Tickets TI</h1>
           <p className="subtitle">Trazabilidad de incidencias reportadas vía Telegram</p>
+          <nav className="tabs">
+            <button className={view === "tickets" ? "tab active" : "tab"} onClick={() => setView("tickets")}>
+              🎫 Tickets
+            </button>
+            <button className={view === "docs" ? "tab active" : "tab"} onClick={() => setView("docs")}>
+              📓 Documentación
+            </button>
+          </nav>
         </div>
         <div className="header-actions">
-          <a className="action-button action-button-primary" href={botDeepLink("nuevo")} target="_blank" rel="noreferrer">
-            + Nuevo ticket
-          </a>
-          <RegistrarTicket />
+          {view === "tickets" && (
+            <>
+              <a
+                className="action-button action-button-primary"
+                href={botDeepLink("nuevo")}
+                target="_blank"
+                rel="noreferrer"
+              >
+                + Nuevo ticket
+              </a>
+              <RegistrarTicket />
+            </>
+          )}
           <button className="logout-button" onClick={() => supabase.auth.signOut()}>
             Cerrar sesión
           </button>
         </div>
       </header>
 
-      <section className="kpi-grid">
-        <KpiCard label="Total de tickets" value={stats.total} accent="#22d3ee" />
-        <KpiCard label="Pendientes" value={stats.pendientes} accent="#fbbf24" />
-        <KpiCard label="Abiertos" value={stats.abiertos} accent="#fb7185" />
-        <KpiCard label="En progreso" value={stats.enProgreso} accent="#38bdf8" />
-        <KpiCard label="Resueltos" value={stats.resueltos} accent="#4ade80" />
-        <KpiCard
-          label="Tiempo prom. de resolución"
-          value={stats.promedioResolucion !== null ? formatHours(stats.promedioResolucion) : "-"}
-          accent="#c084fc"
-        />
-      </section>
+      {view === "docs" ? (
+        <DocsView />
+      ) : (
+        <>
+          <section className="kpi-grid">
+            <KpiCard label="Total de tickets" value={stats.total} accent="#22d3ee" />
+            <KpiCard label="Pendientes" value={stats.pendientes} accent="#fbbf24" />
+            <KpiCard label="Abiertos" value={stats.abiertos} accent="#fb7185" />
+            <KpiCard label="En progreso" value={stats.enProgreso} accent="#38bdf8" />
+            <KpiCard label="Resueltos" value={stats.resueltos} accent="#4ade80" />
+            <KpiCard
+              label="Tiempo prom. de resolución"
+              value={stats.promedioResolucion !== null ? formatHours(stats.promedioResolucion) : "-"}
+              accent="#c084fc"
+            />
+          </section>
 
-      <section className="chart-grid">
-        <div className="panel">
-          <h2>Tickets por categoría</h2>
-          <RankedBarChart data={categoryData} />
-        </div>
-        <div className="panel">
-          <h2>Tendencia (últimos {TREND_DAYS} días)</h2>
-          <TrendChart data={trendData} />
-        </div>
-        <div className="panel">
-          <h2>Tickets por persona (top 10)</h2>
-          <RankedBarChart data={reporterData} />
-        </div>
-      </section>
+          <section className="chart-grid">
+            <div className="panel">
+              <h2>Tickets por categoría</h2>
+              <RankedBarChart data={categoryData} />
+            </div>
+            <div className="panel">
+              <h2>Tendencia (últimos {TREND_DAYS} días)</h2>
+              <TrendChart data={trendData} />
+            </div>
+            <div className="panel">
+              <h2>Tickets por persona (top 10)</h2>
+              <RankedBarChart data={reporterData} />
+            </div>
+          </section>
 
-      <section className="panel">
-        <div className="table-header">
-          <h2>Tickets</h2>
-          <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-            <option value="todos">Todos</option>
-            <option value="abierto">Abiertos</option>
-            <option value="en_progreso">En progreso</option>
-            <option value="resuelto">Resueltos</option>
-            <option value="cerrado">Cerrados</option>
-          </select>
-        </div>
-        <TicketsTable tickets={filteredTickets} onRowClick={openTicket} />
-      </section>
+          <section className="panel">
+            <div className="table-header">
+              <h2>Tickets</h2>
+              <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="abierto">Abiertos</option>
+                <option value="en_progreso">En progreso</option>
+                <option value="resuelto">Resueltos</option>
+                <option value="cerrado">Cerrados</option>
+              </select>
+            </div>
+            <TicketsTable tickets={filteredTickets} onRowClick={openTicket} />
+          </section>
 
-      {selectedTicket && (
-        <TicketDetailModal
-          ticket={selectedTicket}
-          comentarios={comentarios}
-          adjuntos={adjuntos}
-          loadingComentarios={loadingComentarios}
-          onClose={() => setSelectedTicket(null)}
-        />
+          {selectedTicket && (
+            <TicketDetailModal
+              ticket={selectedTicket}
+              comentarios={comentarios}
+              adjuntos={adjuntos}
+              loadingComentarios={loadingComentarios}
+              onClose={() => setSelectedTicket(null)}
+            />
+          )}
+        </>
       )}
     </div>
   );

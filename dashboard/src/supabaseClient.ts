@@ -44,3 +44,16 @@ export interface Adjunto {
   url: string;
   created_at: string;
 }
+
+export interface DocEntry {
+  id: string;
+  title: string;
+  category: string | null;
+  tags: string[];
+  username: string | null;
+  url: string | null;
+  cred_ref: string | null;
+  body: string | null;
+  created_at: string;
+  updated_at: string;
+}
