@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { DocEntry } from "../supabaseClient";
+import { useEffect, useRef, useState } from "react";
+import { DocEntry, supabase } from "../supabaseClient";
+import { countSteps } from "../docsUtils";
+import { resizeImageFile } from "../imageUtils";
 
 export interface DocDraft {
   title: string;
@@ -29,6 +31,9 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
   const [credRef, setCredRef] = useState("");
   const [body, setBody] = useState("");
   const [titleError, setTitleError] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTitle(entry?.title ?? "");
@@ -66,6 +71,49 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       handleSave();
+    }
+  }
+
+  // Inserta texto en la posición del cursor del textarea (o al final si no
+  // hay foco), para que "Insertar imagen" y "Añadir paso" quede donde estabas
+  // escribiendo en vez de siempre al final.
+  function insertAtCursor(snippet: string) {
+    const el = bodyRef.current;
+    if (!el) {
+      setBody((b) => b + snippet);
+      return;
+    }
+    const start = el.selectionStart ?? body.length;
+    const end = el.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + snippet + body.slice(end);
+    setBody(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + snippet.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  function insertStep() {
+    const n = countSteps(body) + 1;
+    insertAtCursor(`\n\n**Paso ${n}:** `);
+  }
+
+  async function handleImageSelected(file: File) {
+    setUploadingImage(true);
+    try {
+      const resized = await resizeImageFile(file);
+      const path = `${crypto.randomUUID()}.jpg`;
+      const { error } = await supabase.storage.from("doc-imagenes").upload(path, resized, {
+        contentType: "image/jpeg",
+      });
+      if (error) throw error;
+      const { data } = supabase.storage.from("doc-imagenes").getPublicUrl(path);
+      insertAtCursor(`\n![imagen](${data.publicUrl})\n`);
+    } catch (err) {
+      alert(`No se pudo subir la imagen: ${err instanceof Error ? err.message : "intenta de nuevo"}`);
+    } finally {
+      setUploadingImage(false);
     }
   }
 
@@ -164,14 +212,40 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
 
         <div className="doc-field">
           <label htmlFor="docBody">Contenido / procedimiento</label>
+          <div className="doc-toolbar">
+            <button type="button" className="action-button" onClick={insertStep}>
+              ➕ Añadir paso
+            </button>
+            <button
+              type="button"
+              className="action-button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingImage}
+            >
+              {uploadingImage ? "Subiendo..." : "🖼️ Insertar imagen"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageSelected(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
           <textarea
             id="docBody"
+            ref={bodyRef}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Pasos, notas, comandos, enlaces... Se respetan los saltos de línea."
           />
           <span className="doc-hint">
-            Consejo: numera los pasos. Los enlaces http(s) se vuelven clicables al ver la entrada.
+            Consejo: usa "Añadir paso" para numerar, y "Insertar imagen" para meter una foto donde esté el cursor.
+            Los enlaces http(s) se vuelven clicables al ver la entrada.
           </span>
         </div>
 

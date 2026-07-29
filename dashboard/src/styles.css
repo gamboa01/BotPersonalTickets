@@ -948,3 +948,22 @@ mark {
 .doc-detail-body a {
   color: var(--neon-cyan);
 }
+
+.doc-inline-image-link {
+  display: block;
+  margin: 8px 0;
+}
+
+.doc-inline-image {
+  max-width: 100%;
+  max-height: 420px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: block;
+}
+
+.doc-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}

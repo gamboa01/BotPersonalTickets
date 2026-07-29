@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DocEntry, supabase } from "../supabaseClient";
-import { DEFAULT_CATEGORIAS_DOC, formatDocDate, highlightSegments, matchesQuery } from "../docsUtils";
+import {
+  DEFAULT_CATEGORIAS_DOC,
+  formatDocDate,
+  highlightSegments,
+  IMAGE_MARKDOWN_RE,
+  matchesQuery,
+  parseBodySegments,
+  stripImageMarkdown,
+} from "../docsUtils";
 import { DocEditorModal, DocDraft } from "./DocEditorModal";
 import { DocDetailModal } from "./DocDetailModal";
 
@@ -176,6 +184,7 @@ export function DocsView() {
       "h2{font-size:15px;margin-top:26px;color:#0a5b55;border-bottom:1px solid #ccc;padding-bottom:4px}" +
       "h3{font-size:14px;margin:16px 0 4px}.m{font-family:monospace;font-size:11px;color:#666;margin:2px 0 6px}" +
       ".b{white-space:pre-wrap;font-size:12.5px;margin:0 0 8px}.t{font-family:monospace;font-size:10px;color:#0a5b55}" +
+      ".b img{max-width:100%;border:1px solid #ccc;border-radius:4px;margin:6px 0;display:block}" +
       "@media print{h2,h3{page-break-after:avoid}article{page-break-inside:avoid}}";
 
     let html = `<h1>Bitácora TI</h1><div class="m">Generado ${new Date().toLocaleString("es-GT")} · ${items.length} entradas</div>`;
@@ -192,7 +201,16 @@ export function DocsView() {
       if (e.url) meta.push(`URL: ${escapeHtmlForPrint(e.url)}`);
       if (e.cred_ref) meta.push(`Credencial en: ${escapeHtmlForPrint(e.cred_ref)}`);
       if (meta.length) html += `<div class="m">${meta.join(" &nbsp;|&nbsp; ")}</div>`;
-      html += `<div class="b">${escapeHtmlForPrint(e.body || "")}</div>`;
+
+      const bodyHtml = parseBodySegments(e.body || "")
+        .map((seg) => {
+          if (seg.type === "image") return `<img src="${escapeHtmlForPrint(seg.url)}" alt="${escapeHtmlForPrint(seg.alt)}" />`;
+          if (seg.type === "link")
+            return `<a href="${escapeHtmlForPrint(seg.value)}">${escapeHtmlForPrint(seg.value)}</a>`;
+          return escapeHtmlForPrint(seg.value);
+        })
+        .join("");
+      html += `<div class="b">${bodyHtml}</div>`;
       if (e.tags.length) html += `<div class="t">${e.tags.map(escapeHtmlForPrint).join(" · ")}</div>`;
       html += "</article>";
     }
@@ -302,10 +320,11 @@ export function DocsView() {
                   {e.username && <span><b>usuario</b> {e.username}</span>}
                   {e.url && <span><b>url</b> {e.url.replace(/^https?:\/\//, "")}</span>}
                   {e.cred_ref && <span><b>credencial</b> {e.cred_ref}</span>}
+                  {e.body && new RegExp(IMAGE_MARKDOWN_RE).test(e.body) && <span>📷 con imágenes</span>}
                 </div>
                 {e.body && (
                   <p className="docs-card-preview">
-                    {highlightSegments(e.body.replace(/\s+/g, " ").trim().slice(0, 220), query).map((seg, i) =>
+                    {highlightSegments(stripImageMarkdown(e.body).slice(0, 220), query).map((seg, i) =>
                       seg.match ? <mark key={i}>{seg.text}</mark> : <span key={i}>{seg.text}</span>
                     )}
                   </p>

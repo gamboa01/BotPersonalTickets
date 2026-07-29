@@ -63,12 +63,51 @@ export function highlightSegments(text: string, query: string): { text: string; 
   }));
 }
 
-// Separa texto plano en fragmentos de texto y URLs http(s), para volver los
-// links clicables en React sin recurrir a dangerouslySetInnerHTML.
-export function linkifySegments(text: string): { text: string; isLink: boolean }[] {
+// Sintaxis de imagen inline dentro del texto: ![alt](url)
+export const IMAGE_MARKDOWN_RE = /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
+
+export type BodySegment =
+  | { type: "text"; value: string }
+  | { type: "link"; value: string }
+  | { type: "image"; url: string; alt: string };
+
+function linkifyPlainText(text: string): BodySegment[] {
   const re = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(re).filter((p) => p !== "");
-  return parts.map((part) => ({ text: part, isLink: /^https?:\/\//.test(part) }));
+  return text
+    .split(re)
+    .filter((p) => p !== "")
+    .map((part) => (/^https?:\/\//.test(part) ? { type: "link", value: part } : { type: "text", value: part }));
+}
+
+// Separa el contenido en texto, links y las imágenes ![alt](url) que se
+// insertan con el botón "Insertar imagen", para renderizarlas en React sin
+// recurrir a dangerouslySetInnerHTML.
+export function parseBodySegments(text: string): BodySegment[] {
+  const segments: BodySegment[] = [];
+  const re = new RegExp(IMAGE_MARKDOWN_RE);
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push(...linkifyPlainText(text.slice(lastIndex, match.index)));
+    }
+    segments.push({ type: "image", alt: match[1], url: match[2] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    segments.push(...linkifyPlainText(text.slice(lastIndex)));
+  }
+  return segments;
+}
+
+// Para la vista previa de la tarjeta: quita las imágenes y deja el texto plano.
+export function stripImageMarkdown(text: string): string {
+  return text.replace(IMAGE_MARKDOWN_RE, "").replace(/\s+/g, " ").trim();
+}
+
+export function countSteps(text: string): number {
+  return (text.match(/\*\*Paso \d+:\*\*/g) || []).length;
 }
 
 export function formatDocDate(iso: string): string {

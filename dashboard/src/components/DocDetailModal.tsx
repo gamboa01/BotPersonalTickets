@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DocEntry } from "../supabaseClient";
-import { formatDocDate, linkifySegments } from "../docsUtils";
+import { formatDocDate, parseBodySegments } from "../docsUtils";
 
 interface DocDetailModalProps {
   entry: DocEntry;
@@ -91,15 +91,23 @@ export function DocDetailModal({ entry, onEdit, onClose }: DocDetailModalProps) 
 
         <div className="doc-detail-body">
           {entry.body ? (
-            linkifySegments(entry.body).map((seg, i) =>
-              seg.isLink ? (
-                <a key={i} href={seg.text} target="_blank" rel="noreferrer">
-                  {seg.text}
-                </a>
-              ) : (
-                <span key={i}>{seg.text}</span>
-              )
-            )
+            parseBodySegments(entry.body).map((seg, i) => {
+              if (seg.type === "image") {
+                return (
+                  <a key={i} href={seg.url} target="_blank" rel="noreferrer" className="doc-inline-image-link">
+                    <img src={seg.url} alt={seg.alt || "Imagen"} className="doc-inline-image" loading="lazy" />
+                  </a>
+                );
+              }
+              if (seg.type === "link") {
+                return (
+                  <a key={i} href={seg.value} target="_blank" rel="noreferrer">
+                    {seg.value}
+                  </a>
+                );
+              }
+              return <span key={i}>{seg.value}</span>;
+            })
           ) : (
             <span className="empty-state">(sin contenido)</span>
           )}
