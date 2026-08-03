@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DocEntry, supabase } from "../supabaseClient";
 import {
   DEFAULT_CATEGORIAS_DOC,
@@ -11,6 +11,7 @@ import {
 } from "../docsUtils";
 import { DocEditorModal, DocDraft } from "./DocEditorModal";
 import { DocDetailModal } from "./DocDetailModal";
+import { DocImportModal } from "./DocImportModal";
 
 function escapeHtmlForPrint(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -26,7 +27,7 @@ export function DocsView() {
   const [editingEntry, setEditingEntry] = useState<DocEntry | null>(null);
   const [viewingEntry, setViewingEntry] = useState<DocEntry | null>(null);
   const [saving, setSaving] = useState(false);
-  const importInputRef = useRef<HTMLInputElement>(null);
+  const [showImport, setShowImport] = useState(false);
 
   async function load() {
     const { data, error } = await supabase.from("docs").select("*").order("updated_at", { ascending: false });
@@ -129,44 +130,41 @@ export function DocsView() {
     setTimeout(() => URL.revokeObjectURL(url), 500);
   }
 
-  function importJson(file: File) {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const parsed = JSON.parse(reader.result as string);
-        const incoming: Record<string, unknown>[] = Array.isArray(parsed.entries)
-          ? parsed.entries
-          : Array.isArray(parsed)
-            ? parsed
-            : [];
-        if (incoming.length === 0) throw new Error("El archivo no tiene entradas reconocibles.");
+  async function importJsonText(jsonText: string) {
+    try {
+      const parsed = JSON.parse(jsonText);
+      const incoming: Record<string, unknown>[] = Array.isArray(parsed.entries)
+        ? parsed.entries
+        : Array.isArray(parsed)
+          ? parsed
+          : [];
+      if (incoming.length === 0) throw new Error("El JSON no tiene entradas reconocibles.");
 
-        const rows = incoming.map((raw) => {
-          const r = raw as Record<string, any>;
-          const now = new Date().toISOString();
-          return {
-            id: r.id ? String(r.id) : crypto.randomUUID(),
-            title: r.title ?? "",
-            category: r.category ?? r.cat ?? "Otros",
-            tags: Array.isArray(r.tags) ? r.tags : [],
-            username: r.username ?? r.user ?? "",
-            url: r.url ?? "",
-            cred_ref: r.cred_ref ?? r.ref ?? "",
-            body: r.body ?? "",
-            created_at: r.created_at ?? r.created ?? now,
-            updated_at: r.updated_at ?? r.updated ?? now,
-          };
-        });
+      const rows = incoming.map((raw) => {
+        const r = raw as Record<string, any>;
+        const now = new Date().toISOString();
+        return {
+          id: r.id ? String(r.id) : crypto.randomUUID(),
+          title: r.title ?? "",
+          category: r.category ?? r.cat ?? "Otros",
+          tags: Array.isArray(r.tags) ? r.tags : [],
+          username: r.username ?? r.user ?? "",
+          url: r.url ?? "",
+          cred_ref: r.cred_ref ?? r.ref ?? "",
+          body: r.body ?? "",
+          created_at: r.created_at ?? r.created ?? now,
+          updated_at: r.updated_at ?? r.updated ?? now,
+        };
+      });
 
-        const { error } = await supabase.from("docs").upsert(rows, { onConflict: "id" });
-        if (error) throw error;
-        await load();
-        alert(`Se importaron ${rows.length} entradas.`);
-      } catch (err) {
-        alert(`No se pudo importar: ${err instanceof Error ? err.message : "archivo inválido"}`);
-      }
-    };
-    reader.readAsText(file);
+      const { error } = await supabase.from("docs").upsert(rows, { onConflict: "id" });
+      if (error) throw error;
+      await load();
+      alert(`Se importaron ${rows.length} entradas.`);
+      setShowImport(false);
+    } catch (err) {
+      alert(`No se pudo importar: ${err instanceof Error ? err.message : "JSON inválido"}`);
+    }
   }
 
   function printPdf() {
@@ -253,23 +251,12 @@ export function DocsView() {
           <button className="action-button doc-full-width" onClick={exportJson}>
             ⬇️ Exportar .json
           </button>
-          <button className="action-button doc-full-width" onClick={() => importInputRef.current?.click()}>
+          <button className="action-button doc-full-width" onClick={() => setShowImport(true)}>
             ⬆️ Importar .json
           </button>
           <button className="action-button doc-full-width" onClick={printPdf}>
             🖨️ Exportar a PDF
           </button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) importJson(file);
-              e.target.value = "";
-            }}
-          />
         </div>
       </aside>
 
@@ -361,6 +348,8 @@ export function DocsView() {
       {viewingEntry && !showEditor && (
         <DocDetailModal entry={viewingEntry} onEdit={() => openEdit(viewingEntry)} onClose={() => setViewingEntry(null)} />
       )}
+
+      {showImport && <DocImportModal onImport={importJsonText} onClose={() => setShowImport(false)} />}
     </div>
   );
 }

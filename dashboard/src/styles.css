@@ -967,3 +967,9 @@ mark {
   gap: 8px;
   margin-bottom: 8px;
 }
+
+.doc-import-textarea {
+  min-height: 260px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  font-size: 12px !important;
+}
