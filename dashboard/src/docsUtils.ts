@@ -68,15 +68,20 @@ export const IMAGE_MARKDOWN_RE = /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
 
 export type BodySegment =
   | { type: "text"; value: string }
+  | { type: "bold"; value: string }
   | { type: "link"; value: string }
   | { type: "image"; url: string; alt: string };
 
 function linkifyPlainText(text: string): BodySegment[] {
-  const re = /(https?:\/\/[^\s]+)/g;
+  const re = /(\*\*[^*]+\*\*|https?:\/\/[^\s]+)/g;
   return text
     .split(re)
     .filter((p) => p !== "")
-    .map((part) => (/^https?:\/\//.test(part) ? { type: "link", value: part } : { type: "text", value: part }));
+    .map((part): BodySegment => {
+      if (/^\*\*[^*]+\*\*$/.test(part)) return { type: "bold", value: part.slice(2, -2) };
+      if (/^https?:\/\//.test(part)) return { type: "link", value: part };
+      return { type: "text", value: part };
+    });
 }
 
 // Separa el contenido en texto, links y las imágenes ![alt](url) que se
@@ -103,7 +108,11 @@ export function parseBodySegments(text: string): BodySegment[] {
 
 // Para la vista previa de la tarjeta: quita las imágenes y deja el texto plano.
 export function stripImageMarkdown(text: string): string {
-  return text.replace(IMAGE_MARKDOWN_RE, "").replace(/\s+/g, " ").trim();
+  return text
+    .replace(IMAGE_MARKDOWN_RE, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function countSteps(text: string): number {

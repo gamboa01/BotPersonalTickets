@@ -205,6 +205,7 @@ export function DocsView() {
           if (seg.type === "image") return `<img src="${escapeHtmlForPrint(seg.url)}" alt="${escapeHtmlForPrint(seg.alt)}" />`;
           if (seg.type === "link")
             return `<a href="${escapeHtmlForPrint(seg.value)}">${escapeHtmlForPrint(seg.value)}</a>`;
+          if (seg.type === "bold") return `<strong>${escapeHtmlForPrint(seg.value)}</strong>`;
           return escapeHtmlForPrint(seg.value);
         })
         .join("");

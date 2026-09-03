@@ -106,6 +106,9 @@ export function DocDetailModal({ entry, onEdit, onClose }: DocDetailModalProps) 
                   </a>
                 );
               }
+              if (seg.type === "bold") {
+                return <strong key={i}>{seg.value}</strong>;
+              }
               return <span key={i}>{seg.value}</span>;
             })
           ) : (
