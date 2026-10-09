@@ -114,7 +114,7 @@ Disponibles para cualquier usuario:
 - `/cancelar` — cancela la operación en curso.
 - `/ayuda` — muestra los comandos disponibles.
 
-Solo para los admins (`ADMIN_CHAT_ID`, admite varios IDs separados por coma; cada admin recibe los avisos de lo que hacen los demás):
+Solo para los admins (`ADMIN_CHAT_ID`, admite varios IDs separados por coma; los avisos de actividad de usuarios no admin llegan solo al primer ID):
 
 - `/registrar <nombre>` — crea un ticket a nombre de alguien que reportó por otro medio (WhatsApp, en persona, etc.), sin usar el bot.
 - `/seguimiento <id>` — agrega un comentario de seguimiento y pasa el ticket a "en progreso"; notifica a quien lo reportó.

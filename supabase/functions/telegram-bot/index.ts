@@ -121,10 +121,9 @@ function isAdmin(telegramId: number) {
   return ADMIN_IDS.includes(String(telegramId));
 }
 
-// Admins a notificar de una acción: todos menos quien la hizo.
-function otherAdmins(actorTelegramId: number) {
-  return ADMIN_IDS.map(Number).filter((id) => id !== actorTelegramId);
-}
+// Los avisos de actividad de usuarios no admin van solo al primer ID de la
+// lista: las cuentas admin son de la misma persona y no hace falta duplicarlos.
+const NOTIFY_ADMIN_ID = ADMIN_IDS.length ? Number(ADMIN_IDS[0]) : null;
 
 // Lista blanca: además del admin, solo los IDs de ALLOWED_USER_IDS (separados
 // por coma) pueden usar el bot. Sin el secret, solo el admin tiene acceso.
@@ -276,8 +275,8 @@ async function handlePhoto(chatId: number, telegramId: number, name: string, pho
   if (ticket.reportado_por !== telegramId) {
     await sendPhoto(Number(ticket.reportado_por), largest.file_id, `📎 Foto nueva en tu ticket #${ticket_id}`);
   } else {
-    for (const adminId of otherAdmins(telegramId)) {
-      await sendPhoto(adminId, largest.file_id, `📎 Foto nueva en el ticket #${ticket_id} (de ${escapeHtml(name)})`);
+    if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
+      await sendPhoto(NOTIFY_ADMIN_ID, largest.file_id, `📎 Foto nueva en el ticket #${ticket_id} (de ${escapeHtml(name)})`);
     }
   }
 }
@@ -827,9 +826,9 @@ async function handleCallback(callback: any) {
       }
       await sendMessage(chatId, `✅ Ticket #${ticket.id} creado con prioridad ${prioridad}.`);
 
-      for (const adminId of otherAdmins(telegramId)) {
+      if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
         await sendMessage(
-          adminId,
+          NOTIFY_ADMIN_ID,
           `🆕 <b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nPrioridad: ${prioridad}\nCreado: ${formatGt(
             ticket.created_at
           )}\n${escapeHtml(draft)}`
@@ -902,9 +901,9 @@ async function handleCallback(callback: any) {
             `🔁 <b>Tu ticket #${ticket_id} fue reabierto</b>\n${escapeHtml(draft)}`
           );
         } else {
-          for (const adminId of otherAdmins(telegramId)) {
+          if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
             await sendMessage(
-              adminId,
+              NOTIFY_ADMIN_ID,
               `🔁 <b>Ticket #${ticket_id} reabierto por quien lo reportó</b>\n${escapeHtml(draft)}`
             );
           }
@@ -932,9 +931,9 @@ async function handleCallback(callback: any) {
             `💬 <b>Nuevo comentario en tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
           );
         } else {
-          for (const adminId of otherAdmins(telegramId)) {
+          if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
             await sendMessage(
-              adminId,
+              NOTIFY_ADMIN_ID,
               `💬 <b>Comentario de ${escapeHtml(name)} en el ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
             );
           }

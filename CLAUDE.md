@@ -56,7 +56,7 @@ Al añadir una tabla nueva, seguir el mismo patrón por defecto (RLS de solo lec
 Puntos a tener en cuenta si se modifica:
 - La verificación de dueño de ticket usa `telegram_id` numérico, nunca username (evita que cualquiera adivine `/estado <id>` de otro). El mensaje de error es idéntico para "no existe" y "no te pertenece", para no filtrar existencia de IDs.
 - Las fotos se reenvían usando el `file_id` original de Telegram (`sendPhoto`), no se vuelven a subir — evita gastar cuota de Storage al reenviar.
-- Acceso por lista blanca: solo los admins de `ADMIN_CHAT_ID` y los usuarios de `ALLOWED_USER_IDS` (ambos admiten varios IDs separados por coma) usan el bot (`isAllowed()`). Los avisos que antes iban "al admin" ahora van a todos los admins menos quien hizo la acción (`otherAdmins()`); se valida en `Deno.serve()` antes del rate limit.
+- Acceso por lista blanca: solo los admins de `ADMIN_CHAT_ID` y los usuarios de `ALLOWED_USER_IDS` (ambos admiten varios IDs separados por coma) usan el bot (`isAllowed()`). Las cuentas admin son de la misma persona: los avisos de actividad de usuarios no admin van solo al primer ID (`NOTIFY_ADMIN_ID`), nunca entre admins; se valida en `Deno.serve()` antes del rate limit.
 - Rate limiting (`rate_limits` table) y validación del secret del webhook (`X-Telegram-Bot-Api-Secret-Token`) ocurren en `Deno.serve()` antes de despachar a cualquier handler.
 - Este archivo no toca el módulo de Documentación en absoluto — esa función es 100% dashboard + Supabase directo.
 
