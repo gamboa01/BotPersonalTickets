@@ -59,7 +59,7 @@ supabase secrets set TELEGRAM_BOT_TOKEN=xxxx:yyyy
 supabase secrets set TELEGRAM_WEBHOOK_SECRET=un-secreto-largo-y-aleatorio
 ```
 
-Solo el admin (`ADMIN_CHAT_ID`) y los IDs de `ALLOWED_USER_IDS` (separados por coma) pueden usar el bot; cualquier otro recibe "No tienes acceso" junto con su ID de Telegram:
+Solo los admins (`ADMIN_CHAT_ID`, uno o varios IDs separados por coma) y los usuarios de `ALLOWED_USER_IDS` (también separados por coma) pueden usar el bot; cualquier otro recibe "No tienes acceso" junto con su ID de Telegram:
 
 ```bash
 supabase secrets set ALLOWED_USER_IDS=123456789
@@ -114,7 +114,7 @@ Disponibles para cualquier usuario:
 - `/cancelar` — cancela la operación en curso.
 - `/ayuda` — muestra los comandos disponibles.
 
-Solo para el admin (`ADMIN_CHAT_ID`):
+Solo para los admins (`ADMIN_CHAT_ID`, admite varios IDs separados por coma; cada admin recibe los avisos de lo que hacen los demás):
 
 - `/registrar <nombre>` — crea un ticket a nombre de alguien que reportó por otro medio (WhatsApp, en persona, etc.), sin usar el bot.
 - `/seguimiento <id>` — agrega un comentario de seguimiento y pasa el ticket a "en progreso"; notifica a quien lo reportó.

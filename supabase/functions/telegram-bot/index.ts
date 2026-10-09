@@ -5,7 +5,8 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ADMIN_CHAT_ID = Deno.env.get("ADMIN_CHAT_ID");
+// Uno o varios IDs de Telegram con permisos de admin, separados por coma.
+const ADMIN_IDS = (Deno.env.get("ADMIN_CHAT_ID") ?? "").split(",").map((id) => id.trim()).filter(Boolean);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -117,7 +118,12 @@ async function clearSession(telegramId: number) {
 }
 
 function isAdmin(telegramId: number) {
-  return !!ADMIN_CHAT_ID && String(telegramId) === ADMIN_CHAT_ID;
+  return ADMIN_IDS.includes(String(telegramId));
+}
+
+// Admins a notificar de una acción: todos menos quien la hizo.
+function otherAdmins(actorTelegramId: number) {
+  return ADMIN_IDS.map(Number).filter((id) => id !== actorTelegramId);
 }
 
 // Lista blanca: además del admin, solo los IDs de ALLOWED_USER_IDS (separados
@@ -269,12 +275,10 @@ async function handlePhoto(chatId: number, telegramId: number, name: string, pho
 
   if (ticket.reportado_por !== telegramId) {
     await sendPhoto(Number(ticket.reportado_por), largest.file_id, `📎 Foto nueva en tu ticket #${ticket_id}`);
-  } else if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
-    await sendPhoto(
-      Number(ADMIN_CHAT_ID),
-      largest.file_id,
-      `📎 Foto nueva en el ticket #${ticket_id} (de ${escapeHtml(name)})`
-    );
+  } else {
+    for (const adminId of otherAdmins(telegramId)) {
+      await sendPhoto(adminId, largest.file_id, `📎 Foto nueva en el ticket #${ticket_id} (de ${escapeHtml(name)})`);
+    }
   }
 }
 
@@ -823,9 +827,9 @@ async function handleCallback(callback: any) {
       }
       await sendMessage(chatId, `✅ Ticket #${ticket.id} creado con prioridad ${prioridad}.`);
 
-      if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
+      for (const adminId of otherAdmins(telegramId)) {
         await sendMessage(
-          Number(ADMIN_CHAT_ID),
+          adminId,
           `🆕 <b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nPrioridad: ${prioridad}\nCreado: ${formatGt(
             ticket.created_at
           )}\n${escapeHtml(draft)}`
@@ -897,11 +901,13 @@ async function handleCallback(callback: any) {
             telegramId,
             `🔁 <b>Tu ticket #${ticket_id} fue reabierto</b>\n${escapeHtml(draft)}`
           );
-        } else if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
-          await sendMessage(
-            Number(ADMIN_CHAT_ID),
-            `🔁 <b>Ticket #${ticket_id} reabierto por quien lo reportó</b>\n${escapeHtml(draft)}`
-          );
+        } else {
+          for (const adminId of otherAdmins(telegramId)) {
+            await sendMessage(
+              adminId,
+              `🔁 <b>Ticket #${ticket_id} reabierto por quien lo reportó</b>\n${escapeHtml(draft)}`
+            );
+          }
         }
       }
       await offerPhoto(chatId, telegramId, ticket_id);
@@ -925,11 +931,13 @@ async function handleCallback(callback: any) {
             telegramId,
             `💬 <b>Nuevo comentario en tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
           );
-        } else if (ADMIN_CHAT_ID && !isAdmin(telegramId)) {
-          await sendMessage(
-            Number(ADMIN_CHAT_ID),
-            `💬 <b>Comentario de ${escapeHtml(name)} en el ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
-          );
+        } else {
+          for (const adminId of otherAdmins(telegramId)) {
+            await sendMessage(
+              adminId,
+              `💬 <b>Comentario de ${escapeHtml(name)} en el ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
+            );
+          }
         }
       }
       await offerPhoto(chatId, telegramId, ticket_id);
