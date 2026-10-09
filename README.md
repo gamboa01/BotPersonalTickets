@@ -59,6 +59,12 @@ supabase secrets set TELEGRAM_BOT_TOKEN=xxxx:yyyy
 supabase secrets set TELEGRAM_WEBHOOK_SECRET=un-secreto-largo-y-aleatorio
 ```
 
+Solo el admin (`ADMIN_CHAT_ID`) y los IDs de `ALLOWED_USER_IDS` (separados por coma) pueden usar el bot; cualquier otro recibe "No tienes acceso" junto con su ID de Telegram:
+
+```bash
+supabase secrets set ALLOWED_USER_IDS=123456789
+```
+
 > `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` ya están disponibles automáticamente dentro de las Edge Functions, no hace falta configurarlos.
 
 Despliega la función:

@@ -120,6 +120,20 @@ function isAdmin(telegramId: number) {
   return !!ADMIN_CHAT_ID && String(telegramId) === ADMIN_CHAT_ID;
 }
 
+// Lista blanca: además del admin, solo los IDs de ALLOWED_USER_IDS (separados
+// por coma) pueden usar el bot. Sin el secret, solo el admin tiene acceso.
+const ALLOWED_USER_IDS = new Set(
+  (Deno.env.get("ALLOWED_USER_IDS") ?? "").split(",").map((id) => id.trim()).filter(Boolean)
+);
+function isAllowed(telegramId: number) {
+  return isAdmin(telegramId) || ALLOWED_USER_IDS.has(String(telegramId));
+}
+
+// Se muestra el ID para que la persona se lo pueda pasar al admin si debe tener acceso.
+function deniedText(telegramId: number) {
+  return `⛔ No tienes acceso a este bot.\nTu ID de Telegram es <code>${telegramId}</code>.`;
+}
+
 // Avisa al usuario que reportó el ticket, salvo que sea la misma persona
 // que está haciendo la actualización (para no notificarse a sí mismo).
 async function notifyReporter(reportedBy: number, actorTelegramId: number, text: string) {
@@ -940,6 +954,10 @@ Deno.serve(async (req) => {
     if (update.callback_query) {
       // deno-lint-ignore no-explicit-any
       const callback = update.callback_query as any;
+      if (!isAllowed(callback.from.id)) {
+        await answerCallback(callback.id, "No tienes acceso a este bot.");
+        return new Response("ok", { status: 200 });
+      }
       const limited = await isRateLimited(callback.message.chat.id, callback.from.id);
       if (limited) {
         await answerCallback(callback.id);
@@ -953,6 +971,12 @@ Deno.serve(async (req) => {
       const telegramId = message.from.id;
       const name = message.from.first_name ?? "usuario";
       const text: string | undefined = message.text;
+
+      // Antes del rate limit, para que alguien sin acceso no genere escrituras en la BD.
+      if (!isAllowed(telegramId)) {
+        await sendMessage(chatId, deniedText(telegramId));
+        return new Response("ok", { status: 200 });
+      }
 
       const limited = await isRateLimited(chatId, telegramId);
       if (!limited) {

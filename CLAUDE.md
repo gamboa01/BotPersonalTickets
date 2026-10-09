@@ -32,7 +32,7 @@ Para la Edge Function (`supabase/functions/telegram-bot`), el flujo de despliegu
 supabase login                                  # requiere SUPABASE_ACCESS_TOKEN si el login por navegador falla
 supabase link --project-ref <project-ref>
 supabase functions deploy telegram-bot --no-verify-jwt
-supabase secrets set TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... ADMIN_CHAT_ID=...
+supabase secrets set TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... ADMIN_CHAT_ID=... ALLOWED_USER_IDS=...
 ```
 
 Las migraciones en `supabase/migrations/*.sql` son secuenciales (`0008_textyler_reset.sql` y `0009_textyler_docs_reset.sql` vaciaron los datos de Alatina (tickets y bitácora) y la 0008 siembra las categorías de TI de Textyler; no volver a correrlas en producción porque borran todo) y se aplican manualmente pegándolas en el SQL Editor de Supabase (o `supabase db push` si el CLI está enlazado) — no hay ORM ni migraciones automáticas en el deploy.
@@ -56,6 +56,7 @@ Al añadir una tabla nueva, seguir el mismo patrón por defecto (RLS de solo lec
 Puntos a tener en cuenta si se modifica:
 - La verificación de dueño de ticket usa `telegram_id` numérico, nunca username (evita que cualquiera adivine `/estado <id>` de otro). El mensaje de error es idéntico para "no existe" y "no te pertenece", para no filtrar existencia de IDs.
 - Las fotos se reenvían usando el `file_id` original de Telegram (`sendPhoto`), no se vuelven a subir — evita gastar cuota de Storage al reenviar.
+- Acceso por lista blanca: solo `ADMIN_CHAT_ID` y los IDs del secret `ALLOWED_USER_IDS` (coma) usan el bot (`isAllowed()`); se valida en `Deno.serve()` antes del rate limit.
 - Rate limiting (`rate_limits` table) y validación del secret del webhook (`X-Telegram-Bot-Api-Secret-Token`) ocurren en `Deno.serve()` antes de despachar a cualquier handler.
 - Este archivo no toca el módulo de Documentación en absoluto — esa función es 100% dashboard + Supabase directo.
 
