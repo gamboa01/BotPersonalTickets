@@ -119,6 +119,7 @@ Solo para los admins (`ADMIN_CHAT_ID`, admite varios IDs separados por coma; los
 - `/registrar <nombre>` — crea un ticket a nombre de alguien que reportó por otro medio (WhatsApp, en persona, etc.), sin usar el bot.
 - `/seguimiento <id>` — agrega un comentario de seguimiento y pasa el ticket a "en progreso"; notifica a quien lo reportó.
 - `/resolver <id>` — marca el ticket como resuelto; notifica a quien lo reportó.
+- `/actualizarmenu` — actualiza el menú de comandos de Telegram (lo que haría `/setcommands` en BotFather): básico para todos y con comandos de admin en el chat de cada admin. Correrlo después de cambiar comandos o `ADMIN_CHAT_ID`.
 - `/ip <dirección>` — muestra en qué rango y política del firewall está una IP (tabla `rangos_ip`, migración `0010`).
 
 Después de crear, dar seguimiento, resolver o reabrir un ticket, el bot ofrece adjuntar una foto en el mismo momento, sin necesidad de usar `/foto` aparte.

@@ -58,6 +58,7 @@ Puntos a tener en cuenta si se modifica:
 - Las fotos se reenvían usando el `file_id` original de Telegram (`sendPhoto`), no se vuelven a subir — evita gastar cuota de Storage al reenviar.
 - Acceso por lista blanca: solo los admins de `ADMIN_CHAT_ID` y los usuarios de `ALLOWED_USER_IDS` (ambos admiten varios IDs separados por coma) usan el bot (`isAllowed()`). Las cuentas admin son de la misma persona: los avisos de actividad de usuarios no admin van solo al primer ID (`NOTIFY_ADMIN_ID`), nunca entre admins; se valida en `Deno.serve()` antes del rate limit.
 - Rate limiting (`rate_limits` table) y validación del secret del webhook (`X-Telegram-Bot-Api-Secret-Token`) ocurren en `Deno.serve()` antes de despachar a cualquier handler.
+- El menú de comandos de Telegram vive en `USER_COMMANDS`/`ADMIN_COMMANDS` y se publica con `/actualizarmenu` (`setMyCommands`), no en BotFather. Al agregar un comando, actualizar esas listas y `helpText()`.
 - Este archivo no toca el módulo de Documentación en absoluto — esa función es 100% dashboard + Supabase directo.
 
 ### Deep links dashboard → bot

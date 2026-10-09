@@ -309,6 +309,39 @@ async function isRateLimited(chatId: number, telegramId: number): Promise<boolea
   return newCount > RATE_LIMIT_MAX;
 }
 
+// Menú de comandos de Telegram (el botón "Menú" / al escribir "/"). Equivale a
+// /setcommands de BotFather; mantenerlo en sync con helpText().
+const USER_COMMANDS = [
+  { command: "nuevo", description: "Crear un ticket nuevo" },
+  { command: "abiertos", description: "Ver tus tickets abiertos o en progreso" },
+  { command: "resueltos", description: "Ver tus tickets resueltos" },
+  { command: "estado", description: "Ver detalle de un ticket: /estado <id>" },
+  { command: "comentar", description: "Comentar un ticket: /comentar <id>" },
+  { command: "foto", description: "Adjuntar una foto: /foto <id>" },
+  { command: "reabrir", description: "Reabrir un ticket: /reabrir <id>" },
+  { command: "cancelar", description: "Cancelar la operación en curso" },
+  { command: "ayuda", description: "Ver la ayuda" },
+];
+const ADMIN_COMMANDS = [
+  ...USER_COMMANDS,
+  { command: "ip", description: "Rango y política del firewall: /ip <dirección>" },
+  { command: "registrar", description: "Ticket a nombre de otra persona: /registrar <nombre>" },
+  { command: "seguimiento", description: "Seguimiento de un ticket: /seguimiento <id>" },
+  { command: "resolver", description: "Resolver un ticket: /resolver <id>" },
+  { command: "actualizarmenu", description: "Actualizar este menú de comandos" },
+];
+
+// Menú básico para todos y, para cada admin, uno con sus comandos en su propio chat.
+async function syncCommandMenu() {
+  const results = [await tg("setMyCommands", { commands: USER_COMMANDS })];
+  for (const adminId of ADMIN_IDS) {
+    results.push(
+      await tg("setMyCommands", { commands: ADMIN_COMMANDS, scope: { type: "chat", chat_id: Number(adminId) } })
+    );
+  }
+  return results.every((r) => r?.ok);
+}
+
 function helpText(esAdmin: boolean) {
   let help = `<b>Comandos disponibles</b>
 /nuevo - crear un ticket nuevo
@@ -326,7 +359,8 @@ function helpText(esAdmin: boolean) {
 /registrar &lt;nombre&gt; - crear un ticket a nombre de alguien que no usa el bot
 /seguimiento &lt;id&gt; - agregar un comentario de seguimiento (pasa a en progreso)
 /resolver &lt;id&gt; - marcar un ticket como resuelto
-/ip &lt;dirección&gt; - ver en qué rango y política del firewall está una IP`;
+/ip &lt;dirección&gt; - ver en qué rango y política del firewall está una IP
+/actualizarmenu - actualizar el menú de comandos de Telegram`;
   }
 
   return help;
@@ -360,6 +394,21 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         break;
       }
       await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
+      break;
+    }
+
+    case "/actualizarmenu": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para actualizar el menú.");
+        break;
+      }
+      const ok = await syncCommandMenu();
+      await sendMessage(
+        chatId,
+        ok
+          ? "✅ Menú de comandos actualizado. Si no lo ves, cierra y vuelve a abrir el chat."
+          : "Ocurrió un error actualizando el menú, intenta de nuevo."
+      );
       break;
     }
 
