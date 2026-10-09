@@ -167,7 +167,7 @@ export default function App() {
     <div className="app">
       <header className="header-row">
         <div>
-          <h1>Dashboard de Tickets TI</h1>
+          <h1>Tickets TI · Textyler</h1>
           <p className="subtitle">Trazabilidad de incidencias reportadas vía Telegram</p>
           <nav className="tabs">
             <button className={view === "tickets" ? "tab active" : "tab"} onClick={() => setView("tickets")}>

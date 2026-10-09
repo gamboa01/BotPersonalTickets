@@ -21,7 +21,7 @@ export function Login() {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
-        <h1>Dashboard de Tickets TI</h1>
+        <h1>Tickets TI · Textyler</h1>
         <p className="subtitle">Inicia sesión para continuar</p>
 
         <label htmlFor="email">Correo</label>

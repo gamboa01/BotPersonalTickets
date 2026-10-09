@@ -137,7 +137,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
               setTitle(e.target.value);
               setTitleError(false);
             }}
-            placeholder="Ej: Restablecer contraseña de alumno en Chamilo"
+            placeholder="Ej: Instalar impresora de etiquetas en bodega"
             autoFocus
           />
           {titleError && <span className="doc-field-error">Ponle un título a la entrada.</span>}
@@ -152,7 +152,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
               list="docCatList"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="Plataformas"
+              placeholder="Impresoras"
             />
             <datalist id="docCatList">
               {categories.map((c) => (
@@ -167,7 +167,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
               type="text"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="chamilo, alumnos, contraseñas"
+              placeholder="zebra, etiquetas, bodega"
             />
           </div>
         </div>
@@ -180,7 +180,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="admin@alatina.online"
+              placeholder="soporte@textyler.com"
             />
           </div>
           <div className="doc-field">
@@ -190,7 +190,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://campus.alatina.online"
+              placeholder="http://192.168.1.10"
             />
           </div>
         </div>

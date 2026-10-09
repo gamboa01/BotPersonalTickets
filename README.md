@@ -1,4 +1,4 @@
-# Sistema de gestión de tickets TI (Bot de Telegram + Supabase + Dashboard)
+# Sistema de gestión de tickets TI de Textyler (Bot de Telegram + Supabase + Dashboard)
 
 ## Arquitectura
 
@@ -33,7 +33,8 @@ dashboard/                        -> app React que se publica en GitHub Pages
    - `Project URL`
    - `anon public key`
    - `service_role key` (no la compartas, es de servidor)
-3. Ve a **SQL Editor**, pega el contenido de [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) y ejecútalo. Esto crea las tablas `tickets`, `categorias`, `comentarios`, `bot_sessions` y las políticas de RLS.
+3. Ve a **SQL Editor** y ejecuta, **en orden**, cada archivo de [`supabase/migrations/`](supabase/migrations/) (`0001_init.sql` … `0007_doc_imagenes.sql`). Esto crea las tablas, los buckets de Storage y las políticas de RLS.
+4. En **Authentication > Users** crea el usuario admin con el email que aparece en `0004_dashboard_auth_rls.sql` (es el único que puede entrar al dashboard).
 
 ## 2. Crear el bot en Telegram
 
@@ -89,6 +90,10 @@ Prueba escribiéndole a tu bot `/start` o `/nuevo` en Telegram.
    - `VITE_SUPABASE_ANON_KEY`
 6. Cada vez que subas cambios dentro de `dashboard/` (aunque sea por upload manual, ya que también genera un commit), el workflow `.github/workflows/deploy-dashboard.yml` compila y publica automáticamente el sitio. También puedes lanzarlo a mano desde la pestaña **Actions > Deploy Dashboard to GitHub Pages > Run workflow**.
 7. La URL final será `https://tu-usuario.github.io/nombre-del-repo/`.
+
+## 6. Evitar que Supabase pause el proyecto
+
+El plan gratuito pausa el proyecto tras 7 días sin actividad. El workflow [`keep-alive.yml`](.github/workflows/keep-alive.yml) hace una consulta liviana cada 3 días usando los mismos secrets del dashboard (`VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`), así que no requiere configuración extra. Puedes probarlo a mano desde **Actions > Keep Supabase alive > Run workflow**.
 
 ## Flujo del bot
 

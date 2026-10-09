@@ -1,0 +1,31 @@
+name: Keep Supabase alive
+
+# El plan gratuito de Supabase pausa el proyecto tras 7 días sin actividad.
+# Una consulta liviana cada 3 días a PostgREST basta para mantenerlo activo
+# (con RLS devuelve [] para la anon key, pero igual toca la base de datos).
+
+on:
+  schedule:
+    - cron: "0 14 */3 * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          curl --fail --silent --show-error \
+            "$SUPABASE_URL/rest/v1/categorias?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+
+      # GitHub desactiva los workflows programados tras 60 días sin commits en el repo;
+      # esto lo vuelve a habilitar vía API (sin hacer commits).
+      - uses: gautamkrishnar/keepalive-workflow@2.0.10

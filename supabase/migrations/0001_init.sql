@@ -8,8 +8,11 @@ create table categorias (
   nombre text not null unique
 );
 
+-- Categorías de soporte TI para la planta de Textyler
 insert into categorias (nombre) values
-  ('Hardware'), ('Software'), ('Redes'), ('Accesos'), ('Otros');
+  ('Computadoras'), ('Impresoras y etiquetas'), ('Red e Internet'), ('Correo'),
+  ('Sistemas / ERP'), ('Accesos y contraseñas'), ('Telefonía'), ('Reloj marcador'),
+  ('Otros');
 
 create table tickets (
   id serial primary key,
