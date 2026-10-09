@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "title": "Rangos de IP y políticas del firewall",
+      "category": "Red",
+      "tags": [
+        "firewall",
+        "ip",
+        "rangos",
+        "políticas"
+      ],
+      "body": "**Rangos de IP y política del firewall**\n\n**192.168.10.0/24**\n192.168.10.2 – 192.168.10.199 → **Estricta**\n192.168.10.200 – 192.168.10.254 → **Flexible**\n\n**192.168.20.0/24**\n192.168.20.2 – 192.168.20.100 → **Flexible**\n192.168.20.101 – 192.168.20.254 → **LAN to LAN** (sin salida a WAN)\n\n**192.168.68.0/24**\n192.168.68.0 – 192.168.68.255 → **LAN to LAN** (sin salida a WAN)\n\nLas IP .1 de las redes 10 y 20 no están en ningún rango (normalmente es la puerta de enlace).\n\n**Consultar desde Telegram**\nEscribe /ip <dirección> al bot, por ejemplo /ip 192.168.10.25, y responde con la política y el rango.\n\n**Si cambian los rangos**\nHay que actualizar la tabla rangos_ip en Supabase (SQL Editor) y también esta entrada, para que coincidan."
+    }
+  ]
+}

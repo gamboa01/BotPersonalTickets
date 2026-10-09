@@ -55,6 +55,11 @@ function base64UrlDecode(value: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+function isIPv4(value: string) {
+  const parts = value.split(".");
+  return parts.length === 4 && parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
+}
+
 const GT_TIMEZONE = "America/Guatemala";
 function formatGt(iso: string) {
   return new Date(iso).toLocaleString("es-GT", {
@@ -303,7 +308,8 @@ function helpText(esAdmin: boolean) {
     help += `
 /registrar &lt;nombre&gt; - crear un ticket a nombre de alguien que no usa el bot
 /seguimiento &lt;id&gt; - agregar un comentario de seguimiento (pasa a en progreso)
-/resolver &lt;id&gt; - marcar un ticket como resuelto`;
+/resolver &lt;id&gt; - marcar un ticket como resuelto
+/ip &lt;dirección&gt; - ver en qué rango y política del firewall está una IP`;
   }
 
   return help;
@@ -585,6 +591,42 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       }
       await setSession(telegramId, "awaiting_reapertura", { ticket_id: id });
       await sendMessage(chatId, `Escribe el motivo para reabrir el ticket #${id}:`);
+      break;
+    }
+
+    case "/ip": {
+      // Solo admin: los rangos del firewall son información interna de la red.
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para consultar rangos de IP.");
+        break;
+      }
+      if (!isIPv4(arg)) {
+        await sendMessage(chatId, "Uso: /ip <dirección>, por ejemplo /ip 192.168.10.25");
+        break;
+      }
+      const { data: rangos, error } = await supabase.rpc("buscar_rango_ip", { ip: arg });
+      if (error) {
+        await sendMessage(chatId, "Ocurrió un error consultando los rangos, intenta de nuevo.");
+        break;
+      }
+      if (!rangos?.length) {
+        await sendMessage(chatId, `🌐 ${arg}\nNo está dentro de ningún rango registrado.`);
+        break;
+      }
+      // El primero es el más específico; los demás son rangos más amplios que también la contienen.
+      const [principal, ...otros] = rangos;
+      let msg =
+        `🌐 ${arg}\n` +
+        `Política: <b>${escapeHtml(principal.politica)}</b>\n` +
+        `Rango: ${principal.desde} – ${principal.hasta}`;
+      if (principal.descripcion) msg += `\n${escapeHtml(principal.descripcion)}`;
+      if (otros.length) {
+        msg +=
+          "\n\nTambién dentro de:\n" +
+          // deno-lint-ignore no-explicit-any
+          otros.map((r: any) => `• ${r.desde} – ${r.hasta}: ${escapeHtml(r.politica)}`).join("\n");
+      }
+      await sendMessage(chatId, msg);
       break;
     }
 
