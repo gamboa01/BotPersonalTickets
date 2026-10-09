@@ -35,7 +35,7 @@ supabase functions deploy telegram-bot --no-verify-jwt
 supabase secrets set TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... ADMIN_CHAT_ID=...
 ```
 
-Las migraciones en `supabase/migrations/*.sql` son secuenciales (`0008_textyler_reset.sql` vació los datos de Alatina y siembra las categorías de TI de Textyler; no volver a correrla en producción porque borra todos los tickets) y se aplican manualmente pegándolas en el SQL Editor de Supabase (o `supabase db push` si el CLI está enlazado) — no hay ORM ni migraciones automáticas en el deploy.
+Las migraciones en `supabase/migrations/*.sql` son secuenciales (`0008_textyler_reset.sql` y `0009_textyler_docs_reset.sql` vaciaron los datos de Alatina (tickets y bitácora) y la 0008 siembra las categorías de TI de Textyler; no volver a correrlas en producción porque borran todo) y se aplican manualmente pegándolas en el SQL Editor de Supabase (o `supabase db push` si el CLI está enlazado) — no hay ORM ni migraciones automáticas en el deploy.
 
 El dashboard se despliega solo: `.github/workflows/deploy-dashboard.yml` compila y publica a GitHub Pages en cada push a `main` que toque `dashboard/**` (o manualmente desde Actions). Necesita los secrets `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` configurados en GitHub.
 

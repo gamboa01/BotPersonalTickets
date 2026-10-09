@@ -33,7 +33,7 @@ dashboard/                        -> app React que se publica en GitHub Pages
    - `Project URL`
    - `anon public key`
    - `service_role key` (no la compartas, es de servidor)
-3. Ve a **SQL Editor** y ejecuta, **en orden**, cada archivo de [`supabase/migrations/`](supabase/migrations/) (`0001_init.sql` … `0008_textyler_reset.sql`). Esto crea las tablas, los buckets de Storage y las políticas de RLS.
+3. Ve a **SQL Editor** y ejecuta, **en orden**, cada archivo de [`supabase/migrations/`](supabase/migrations/) (`0001_init.sql` … `0009_textyler_docs_reset.sql`). Esto crea las tablas, los buckets de Storage y las políticas de RLS.
 4. En **Authentication > Users** crea el usuario admin con el email que aparece en `0004_dashboard_auth_rls.sql` (es el único que puede entrar al dashboard).
 
 ## 2. Crear el bot en Telegram
