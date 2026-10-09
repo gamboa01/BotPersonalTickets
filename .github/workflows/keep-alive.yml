@@ -9,8 +9,11 @@ on:
     - cron: "0 14 */3 * *"
   workflow_dispatch:
 
+# GitHub desactiva los workflows programados tras 60 días sin commits en el
+# repo (avisa por correo antes); si pasa, se reactiva desde la pestaña Actions.
+
 permissions:
-  actions: write
+  contents: read
 
 jobs:
   ping:
@@ -26,6 +29,3 @@ jobs:
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY"
 
-      # GitHub desactiva los workflows programados tras 60 días sin commits en el repo;
-      # esto lo vuelve a habilitar vía API (sin hacer commits).
-      - uses: gautamkrishnar/keepalive-workflow@2.0.10
