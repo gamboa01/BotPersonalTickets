@@ -9,10 +9,17 @@ import { TicketDetailModal } from "./components/TicketDetailModal";
 import { Login } from "./components/Login";
 import { RegistrarTicket } from "./components/RegistrarTicket";
 import { DocsView } from "./components/DocsView";
+import { PlantaView } from "./components/PlantaView";
 import { gtDayKey } from "./timezone";
 import { botDeepLink } from "./telegram";
 
 const TREND_DAYS = 14;
+
+// Deep link desde el bot (/areas → "Ver en el plano"): #area=<id> abre la pestaña Planta.
+function areaFromHash() {
+  const match = window.location.hash.match(/^#area=(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
 
 function formatHours(hours: number) {
   if (hours < 24) return `${hours.toFixed(1)} h`;
@@ -22,7 +29,8 @@ function formatHours(hours: number) {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [view, setView] = useState<"tickets" | "docs">("tickets");
+  const [initialAreaId] = useState(areaFromHash);
+  const [view, setView] = useState<"tickets" | "docs" | "planta">(initialAreaId !== null ? "planta" : "tickets");
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +61,7 @@ export default function App() {
     async function load() {
       const { data, error } = await supabase
         .from("tickets")
-        .select("*, categorias(nombre)")
+        .select("*, categorias(nombre), areas(nombre)")
         .order("created_at", { ascending: false });
 
       if (!active) return;
@@ -106,6 +114,18 @@ export default function App() {
       counts.set(nombre, (counts.get(nombre) ?? 0) + 1);
     }
     return Array.from(counts.entries()).map(([nombre, total]) => ({ nombre, total }));
+  }, [tickets]);
+
+  const areaData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of tickets) {
+      const nombre = t.areas?.nombre ?? "Sin área";
+      counts.set(nombre, (counts.get(nombre) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([nombre, total]) => ({ nombre, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
   }, [tickets]);
 
   const reporterData = useMemo(() => {
@@ -176,6 +196,9 @@ export default function App() {
             <button className={view === "docs" ? "tab active" : "tab"} onClick={() => setView("docs")}>
               📓 Documentación
             </button>
+            <button className={view === "planta" ? "tab active" : "tab"} onClick={() => setView("planta")}>
+              🏭 Planta
+            </button>
           </nav>
         </div>
         <div className="header-actions">
@@ -200,6 +223,8 @@ export default function App() {
 
       {view === "docs" ? (
         <DocsView />
+      ) : view === "planta" ? (
+        <PlantaView tickets={tickets} initialAreaId={initialAreaId} onOpenTicket={openTicket} />
       ) : (
         <>
           <section className="kpi-grid">
@@ -225,6 +250,10 @@ export default function App() {
               <TrendChart data={trendData} />
             </div>
             <div className="panel">
+              <h2>Tickets por área (top 10)</h2>
+              <RankedBarChart data={areaData} />
+            </div>
+            <div className="panel">
               <h2>Tickets por persona (top 10)</h2>
               <RankedBarChart data={reporterData} />
             </div>
@@ -243,17 +272,18 @@ export default function App() {
             </div>
             <TicketsTable tickets={filteredTickets} onRowClick={openTicket} />
           </section>
-
-          {selectedTicket && (
-            <TicketDetailModal
-              ticket={selectedTicket}
-              comentarios={comentarios}
-              adjuntos={adjuntos}
-              loadingComentarios={loadingComentarios}
-              onClose={() => setSelectedTicket(null)}
-            />
-          )}
         </>
+      )}
+
+      {/* Fuera de las vistas: también se abre desde la ficha de un área en Planta. */}
+      {selectedTicket && (
+        <TicketDetailModal
+          ticket={selectedTicket}
+          comentarios={comentarios}
+          adjuntos={adjuntos}
+          loadingComentarios={loadingComentarios}
+          onClose={() => setSelectedTicket(null)}
+        />
       )}
     </div>
   );

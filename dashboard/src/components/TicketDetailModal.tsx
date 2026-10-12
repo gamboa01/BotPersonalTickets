@@ -28,6 +28,8 @@ export function TicketDetailModal({
         </div>
 
         <dl className="modal-meta">
+          <dt>Área</dt>
+          <dd>{ticket.areas?.nombre ?? "-"}</dd>
           <dt>Categoría</dt>
           <dd>{ticket.categorias?.nombre ?? "-"}</dd>
           <dt>Prioridad</dt>

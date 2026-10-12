@@ -23,6 +23,8 @@ export interface Ticket {
   updated_at: string;
   resolved_at: string | null;
   categorias?: { nombre: string } | null;
+  area_id: number | null;
+  areas?: { nombre: string } | null;
 }
 
 export interface Categoria {
@@ -54,6 +56,27 @@ export interface DocEntry {
   url: string | null;
   cred_ref: string | null;
   body: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AreaTipo = "area" | "produccion" | "referencia";
+
+// Rectángulo del croquis en celdas de la cuadrícula (ver planUtils.ts).
+export interface Area {
+  id: number;
+  nombre: string;
+  nivel: 1 | 2;
+  tipo: AreaTipo;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string | null;
+  ubicacion: string | null;
+  encargado: string | null;
+  extension: string | null;
+  notas: string | null;
   created_at: string;
   updated_at: string;
 }

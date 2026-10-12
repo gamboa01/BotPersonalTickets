@@ -25,6 +25,7 @@ export function TicketsTable({ tickets, onRowClick }: TicketsTableProps) {
           <tr>
             <th>#</th>
             <th>Descripción</th>
+            <th>Área</th>
             <th>Categoría</th>
             <th>Prioridad</th>
             <th>Estado</th>
@@ -37,6 +38,7 @@ export function TicketsTable({ tickets, onRowClick }: TicketsTableProps) {
             <tr key={t.id} className="clickable-row" onClick={() => onRowClick(t)}>
               <td>{t.id}</td>
               <td className="descripcion-cell">{t.descripcion}</td>
+              <td>{t.areas?.nombre ?? "-"}</td>
               <td>{t.categorias?.nombre ?? "-"}</td>
               <td>
                 <span className={`badge badge-${t.prioridad}`}>{t.prioridad}</span>

@@ -85,6 +85,101 @@ function categoryRows(categorias: any[]) {
   return rows;
 }
 
+// ---------- Áreas de la planta (croquis del dashboard, tabla `areas`) ----------
+
+const NIVEL_LABEL: Record<number, string> = { 1: "Planta baja", 2: "Planta alta" };
+// Ancho de la cuadrícula del croquis (ver 0011_areas.sql); el plano se dibuja
+// con la entrada principal abajo, así que izquierda/derecha son vistas desde ahí.
+const PLANO_ANCHO = 60;
+const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL");
+
+// deno-lint-ignore no-explicit-any
+function ladoArea(area: any) {
+  const centro = area.x + area.w / 2;
+  if (centro < PLANO_ANCHO / 3) return "lado izquierdo";
+  if (centro > (PLANO_ANCHO * 2) / 3) return "lado derecho";
+  return "centro";
+}
+
+// Para buscar sin importar mayúsculas ni tildes ("produccion" encuentra "Producción").
+function normalizar(text: string) {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+// deno-lint-ignore no-explicit-any
+function areaRows(areas: any[]) {
+  const rows = [];
+  for (let i = 0; i < areas.length; i += 2) {
+    rows.push(areas.slice(i, i + 2).map((a) => ({ text: a.nombre, callback_data: `area:${a.id}` })));
+  }
+  return rows;
+}
+
+const FLOOR_KEYBOARD = {
+  inline_keyboard: [
+    [
+      { text: "⬇️ Planta baja", callback_data: "piso:1" },
+      { text: "⬆️ Planta alta", callback_data: "piso:2" },
+    ],
+    [{ text: "🤷 No sé / no aplica", callback_data: "area:0" }],
+    [{ text: "❌ Cancelar", callback_data: "cancel" }],
+  ],
+};
+
+async function askCategory(
+  chatId: number,
+  telegramId: number,
+  payload: { reportado_por_nombre?: string; area_id?: number | null }
+) {
+  const { data: categoriasRaw } = await supabase.from("categorias").select("*").order("id");
+  // "Otros" siempre al final, sin importar el orden de inserción.
+  const categorias = [...(categoriasRaw ?? [])].sort((a, b) =>
+    a.nombre === "Otros" ? 1 : b.nombre === "Otros" ? -1 : 0
+  );
+  await setSession(telegramId, "awaiting_category", payload);
+  const prompt = payload.reportado_por_nombre
+    ? `Selecciona una categoría para el ticket de ${escapeHtml(payload.reportado_por_nombre)}:`
+    : "Selecciona una categoría:";
+  await sendMessage(chatId, prompt, {
+    reply_markup: {
+      inline_keyboard: [...categoryRows(categorias), [{ text: "❌ Cancelar", callback_data: "cancel" }]],
+    },
+  });
+}
+
+// /nuevo y /registrar empiezan preguntando dónde está el problema (planta →
+// área). Mientras no haya áreas dibujadas en el croquis, se salta ese paso.
+async function startTicketFlow(chatId: number, telegramId: number, payload: { reportado_por_nombre?: string }) {
+  const { count } = await supabase
+    .from("areas")
+    .select("id", { count: "exact", head: true })
+    .neq("tipo", "referencia");
+  if (!count) {
+    await askCategory(chatId, telegramId, payload);
+    return;
+  }
+  await setSession(telegramId, "awaiting_area", payload);
+  await sendMessage(chatId, "📍 ¿En qué planta está el problema?", { reply_markup: FLOOR_KEYBOARD });
+}
+
+// deno-lint-ignore no-explicit-any
+async function sendAreaDetail(chatId: number, area: any) {
+  const { count: abiertos } = await supabase
+    .from("tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("area_id", area.id)
+    .in("estado", ["abierto", "en_progreso"]);
+
+  let msg = `📍 <b>${escapeHtml(area.nombre)}</b>\n${NIVEL_LABEL[area.nivel]} · ${ladoArea(area)}`;
+  if (area.ubicacion) msg += `\n🧭 ${escapeHtml(area.ubicacion)}`;
+  if (area.encargado) msg += `\n👤 Encargado: ${escapeHtml(area.encargado)}`;
+  if (area.extension) msg += `\n☎️ Ext.: ${escapeHtml(area.extension)}`;
+  if (area.notas) msg += `\n📝 ${escapeHtml(area.notas)}`;
+  if (area.tipo !== "referencia") msg += `\n🎫 Tickets abiertos: ${abiertos ?? 0}`;
+  if (DASHBOARD_URL) msg += `\n\n<a href="${DASHBOARD_URL}#area=${area.id}">🗺️ Ver en el plano</a>`;
+  await sendMessage(chatId, msg, { disable_web_page_preview: true });
+}
+
 const SESSION_TIMEOUT_MS = 30 * 60_000;
 
 // Si la sesión lleva más de 30 min sin actividad, se descarta: evita que un
@@ -318,6 +413,7 @@ const USER_COMMANDS = [
   { command: "estado", description: "Ver detalle de un ticket: /estado <id>" },
   { command: "comentar", description: "Comentar un ticket: /comentar <id>" },
   { command: "foto", description: "Adjuntar una foto: /foto <id>" },
+  { command: "areas", description: "Ubicar un área de la planta: /areas <nombre>" },
   { command: "reabrir", description: "Reabrir un ticket: /reabrir <id>" },
   { command: "cancelar", description: "Cancelar la operación en curso" },
   { command: "ayuda", description: "Ver la ayuda" },
@@ -350,6 +446,7 @@ function helpText(esAdmin: boolean) {
 /estado &lt;id&gt; - ver detalle de un ticket
 /comentar &lt;id&gt; - agregar un comentario al historial (sin cambiar el estado)
 /foto &lt;id&gt; - adjuntar una foto a un ticket
+/areas &lt;nombre&gt; - ver dónde queda un área de la planta (sin nombre, lista todas)
 /reabrir &lt;id&gt; - reabrir un ticket resuelto o cerrado
 /cancelar - cancelar la operación en curso
 /ayuda - ver esta ayuda`;
@@ -417,20 +514,46 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       break;
 
     case "/nuevo": {
-      const { data: categoriasRaw } = await supabase.from("categorias").select("*").order("id");
-      // "Otros" siempre al final, sin importar el orden de inserción.
-      const categorias = [...(categoriasRaw ?? [])].sort((a, b) =>
-        a.nombre === "Otros" ? 1 : b.nombre === "Otros" ? -1 : 0
+      await startTicketFlow(chatId, telegramId, {});
+      break;
+    }
+
+    case "/areas": {
+      const { data: areas } = await supabase.from("areas").select("*").order("nivel").order("nombre");
+      if (!areas?.length) {
+        await sendMessage(chatId, "Todavía no hay áreas registradas. Se dibujan en el dashboard, pestaña Planta.");
+        break;
+      }
+
+      if (!arg) {
+        let msg = "<b>Áreas de la planta</b>";
+        for (const nivel of [1, 2]) {
+          const delNivel = areas.filter((a) => a.nivel === nivel && a.tipo !== "referencia");
+          if (!delNivel.length) continue;
+          msg += `\n\n<b>${NIVEL_LABEL[nivel]}</b>\n` + delNivel.map((a) => `• ${escapeHtml(a.nombre)}`).join("\n");
+        }
+        msg += "\n\nUsa /areas &lt;nombre&gt; para ver dónde queda, por ejemplo /areas contabilidad";
+        await sendMessage(chatId, msg);
+        break;
+      }
+
+      const buscado = normalizar(arg);
+      const encontradas = areas.filter(
+        (a) => normalizar(a.nombre).includes(buscado) || (a.encargado && normalizar(a.encargado).includes(buscado))
       );
-      await setSession(telegramId, "awaiting_category", {});
-      await sendMessage(chatId, "Selecciona una categoría:", {
-        reply_markup: {
-          inline_keyboard: [
-            ...categoryRows(categorias),
-            [{ text: "❌ Cancelar", callback_data: "cancel" }],
-          ],
-        },
-      });
+      if (!encontradas.length) {
+        await sendMessage(chatId, `No encontré ningún área con "${escapeHtml(arg)}". Usa /areas para ver la lista.`);
+      } else if (encontradas.length === 1) {
+        await sendAreaDetail(chatId, encontradas[0]);
+      } else {
+        await sendMessage(chatId, `Encontré ${encontradas.length} áreas, ¿cuál buscas?`, {
+          reply_markup: {
+            inline_keyboard: encontradas.map((a) => [
+              { text: `${a.nombre} · ${NIVEL_LABEL[a.nivel]}`, callback_data: `verarea:${a.id}` },
+            ]),
+          },
+        });
+      }
       break;
     }
 
@@ -443,19 +566,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         await sendMessage(chatId, "Uso: /registrar <nombre de la persona>");
         break;
       }
-      const { data: categoriasRaw } = await supabase.from("categorias").select("*").order("id");
-      const categorias = [...(categoriasRaw ?? [])].sort((a, b) =>
-        a.nombre === "Otros" ? 1 : b.nombre === "Otros" ? -1 : 0
-      );
-      await setSession(telegramId, "awaiting_category", { reportado_por_nombre: arg });
-      await sendMessage(chatId, `Selecciona una categoría para el ticket de ${escapeHtml(arg)}:`, {
-        reply_markup: {
-          inline_keyboard: [
-            ...categoryRows(categorias),
-            [{ text: "❌ Cancelar", callback_data: "cancel" }],
-          ],
-        },
-      });
+      await startTicketFlow(chatId, telegramId, { reportado_por_nombre: arg });
       break;
     }
 
@@ -512,7 +623,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       }
       const { data: ticket } = await supabase
         .from("tickets")
-        .select("*, categorias(nombre)")
+        .select("*, categorias(nombre), areas(nombre)")
         .eq("id", id)
         .maybeSingle();
       if (!ticket || (!isAdmin(telegramId) && ticket.reportado_por !== telegramId)) {
@@ -528,6 +639,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
 
       let msg =
         `<b>Ticket #${ticket.id}</b>\n` +
+        `Área: ${escapeHtml(ticket.areas?.nombre ?? "-")}\n` +
         `Categoría: ${escapeHtml(ticket.categorias?.nombre ?? "-")}\n` +
         `Prioridad: ${ticket.prioridad}\n` +
         `Estado: ${ticket.estado}\n` +
@@ -716,18 +828,19 @@ async function handleFreeText(chatId: number, telegramId: number, text: string) 
   }
 
   if (session.step === "awaiting_description" || session.step === "confirming_description") {
-    const { categoria_id, prioridad, draft_message_id, reportado_por_nombre } = session.payload as {
+    const { categoria_id, prioridad, draft_message_id, reportado_por_nombre, area_id } = session.payload as {
       categoria_id: number;
       prioridad: string;
       draft_message_id?: number;
       reportado_por_nombre?: string;
+      area_id?: number | null;
     };
     await presentDraft(
       chatId,
       telegramId,
       "description",
       text,
-      { categoria_id, prioridad, reportado_por_nombre },
+      { categoria_id, prioridad, reportado_por_nombre, area_id },
       draft_message_id
     );
     return;
@@ -754,6 +867,11 @@ async function handleFreeText(chatId: number, telegramId: number, text: string) 
   if (session.step === "awaiting_comentario" || session.step === "confirming_comentario") {
     const { ticket_id, draft_message_id } = session.payload as { ticket_id: number; draft_message_id?: number };
     await presentDraft(chatId, telegramId, "comentario", text, { ticket_id }, draft_message_id);
+    return;
+  }
+
+  if (session.step === "awaiting_area" || session.step === "awaiting_category") {
+    await sendMessage(chatId, "Elige una opción con los botones de arriba, o usa /cancelar.");
     return;
   }
 
@@ -784,12 +902,77 @@ async function handleCallback(callback: any) {
     return;
   }
 
+  if (data.startsWith("verarea:")) {
+    const { data: area } = await supabase.from("areas").select("*").eq("id", Number(data.split(":")[1])).maybeSingle();
+    if (area) await sendAreaDetail(chatId, area);
+    return;
+  }
+
+  if (data.startsWith("piso:")) {
+    const session = await getSession(telegramId);
+    if (!session || session.step !== "awaiting_area") {
+      await sendMessage(chatId, "Esa selección ya expiró, usa /nuevo para empezar de nuevo.");
+      return;
+    }
+    const messageId = callback.message.message_id;
+    const piso = data.split(":")[1];
+    if (piso === "back") {
+      await editMessageText(chatId, messageId, "📍 ¿En qué planta está el problema?", { reply_markup: FLOOR_KEYBOARD });
+      return;
+    }
+    const nivel = Number(piso);
+    const { data: areas } = await supabase
+      .from("areas")
+      .select("id, nombre")
+      .eq("nivel", nivel)
+      .neq("tipo", "referencia")
+      .order("nombre");
+    if (!areas?.length) {
+      await editMessageText(chatId, messageId, `No hay áreas registradas en ${NIVEL_LABEL[nivel].toLowerCase()}.`, {
+        reply_markup: FLOOR_KEYBOARD,
+      });
+      return;
+    }
+    await editMessageText(chatId, messageId, `📍 ${NIVEL_LABEL[nivel]}: ¿en qué área?`, {
+      reply_markup: {
+        inline_keyboard: [
+          ...areaRows(areas),
+          [{ text: "⬅️ Cambiar planta", callback_data: "piso:back" }],
+          [{ text: "❌ Cancelar", callback_data: "cancel" }],
+        ],
+      },
+    });
+    return;
+  }
+
+  if (data.startsWith("area:")) {
+    const session = await getSession(telegramId);
+    if (!session || session.step !== "awaiting_area") {
+      await sendMessage(chatId, "Esa selección ya expiró, usa /nuevo para empezar de nuevo.");
+      return;
+    }
+    const areaId = Number(data.split(":")[1]);
+    let nombre = "No especificada";
+    if (areaId) {
+      const { data: area } = await supabase.from("areas").select("nombre").eq("id", areaId).maybeSingle();
+      nombre = area?.nombre ?? nombre;
+    }
+    // Deja fijada la elección en el mensaje y quita los botones.
+    await editMessageText(chatId, callback.message.message_id, `📍 Área: <b>${escapeHtml(nombre)}</b>`, {
+      reply_markup: { inline_keyboard: [] },
+    });
+    // deno-lint-ignore no-explicit-any
+    const { reportado_por_nombre } = session.payload as any;
+    await askCategory(chatId, telegramId, { reportado_por_nombre, area_id: areaId || null });
+    return;
+  }
+
   if (data.startsWith("cat:")) {
     const categoria_id = Number(data.split(":")[1]);
     const session = await getSession(telegramId);
     // deno-lint-ignore no-explicit-any
-    const reportado_por_nombre = (session?.payload as any)?.reportado_por_nombre;
-    await setSession(telegramId, "awaiting_priority", { categoria_id, reportado_por_nombre });
+    const { reportado_por_nombre, area_id } = (session?.payload as any) ?? {};
+    await setSession(telegramId, "awaiting_priority", { categoria_id, reportado_por_nombre, area_id });
     await sendMessage(chatId, "Selecciona la prioridad:", {
       reply_markup: {
         inline_keyboard: [
@@ -816,10 +999,8 @@ async function handleCallback(callback: any) {
       return;
     }
     // deno-lint-ignore no-explicit-any
-    const categoria_id = (session.payload as any)?.categoria_id;
-    // deno-lint-ignore no-explicit-any
-    const reportado_por_nombre = (session.payload as any)?.reportado_por_nombre;
-    await setSession(telegramId, "awaiting_description", { categoria_id, prioridad, reportado_por_nombre });
+    const { categoria_id, reportado_por_nombre, area_id } = session.payload as any;
+    await setSession(telegramId, "awaiting_description", { categoria_id, prioridad, reportado_por_nombre, area_id });
     await sendMessage(chatId, "Describe el problema:");
     return;
   }
@@ -856,17 +1037,18 @@ async function handleCallback(callback: any) {
     }
 
     if (kind === "description") {
-      const { categoria_id, prioridad, reportado_por_nombre } = payload;
+      const { categoria_id, prioridad, reportado_por_nombre, area_id } = payload;
       const { data: ticket, error } = await supabase
         .from("tickets")
         .insert({
           descripcion: draft,
           categoria_id,
           prioridad,
+          area_id: area_id ?? null,
           reportado_por: telegramId,
           reportado_por_nombre: reportado_por_nombre || name,
         })
-        .select()
+        .select("*, areas(nombre)")
         .single();
 
       if (error || !ticket) {
@@ -878,7 +1060,9 @@ async function handleCallback(callback: any) {
       if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
         await sendMessage(
           NOTIFY_ADMIN_ID,
-          `🆕 <b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nPrioridad: ${prioridad}\nCreado: ${formatGt(
+          `🆕 <b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nÁrea: ${escapeHtml(
+            ticket.areas?.nombre ?? "-"
+          )}\nPrioridad: ${prioridad}\nCreado: ${formatGt(
             ticket.created_at
           )}\n${escapeHtml(draft)}`
         );

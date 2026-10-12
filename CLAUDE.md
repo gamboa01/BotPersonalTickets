@@ -41,17 +41,17 @@ El dashboard se despliega solo: `.github/workflows/deploy-dashboard.yml` compila
 
 ## Arquitectura
 
-### Modelo de acceso: el dashboard es de solo lectura, salvo `docs`
+### Modelo de acceso: el dashboard es de solo lectura, salvo `docs` y `areas`
 
 Todas las tablas (`tickets`, `categorias`, `comentarios`, `adjuntos`) tienen RLS restringido a un único email admin vía `auth.jwt() ->> 'email' = '...'` (ver `0004_dashboard_auth_rls.sql`). Las escrituras reales (crear/actualizar tickets) las hace **solo** la Edge Function del bot, usando la `service_role key` (nunca expuesta al frontend). El dashboard usa la `anon key` y por eso solo puede leer.
 
-La única excepción es la tabla `docs` (módulo de Documentación, `0006_docs.sql`) — ahí el dashboard sí tiene RLS de escritura completa (`for all`), porque ese módulo vive exclusivamente en el dashboard y no lo toca el bot.
+Las excepciones son `docs` (módulo de Documentación, `0006_docs.sql`) y `areas` (croquis de la planta, `0011_areas.sql`) — ahí el dashboard sí tiene RLS de escritura completa (`for all`), porque ese contenido se edita solo desde el dashboard. El bot solo lee `areas` (para `/areas` y el paso de área en `/nuevo`).
 
 Al añadir una tabla nueva, seguir el mismo patrón por defecto (RLS de solo lectura para el dashboard) salvo que el feature sea explícitamente dashboard-only como `docs`.
 
 ### El bot de Telegram es una única función grande basada en sesiones
 
-`supabase/functions/telegram-bot/index.ts` (~900 líneas) maneja todo el flujo conversacional con una tabla `bot_sessions` (estado por `telegram_id`, con expiración de 30 min vía `SESSION_TIMEOUT_MS`). El patrón repetido es: comando → pide categoría/prioridad con botones inline → pide texto libre → muestra vista previa editable ("Listo"/"Editar") antes de escribir a la BD → ofrece adjuntar foto (Sí/No).
+`supabase/functions/telegram-bot/index.ts` (~900 líneas) maneja todo el flujo conversacional con una tabla `bot_sessions` (estado por `telegram_id`, con expiración de 30 min vía `SESSION_TIMEOUT_MS`). El patrón repetido es: comando → (en `/nuevo` y `/registrar`, `startTicketFlow()` pregunta planta → área si hay áreas en el croquis) → pide categoría/prioridad con botones inline → pide texto libre → muestra vista previa editable ("Listo"/"Editar") antes de escribir a la BD → ofrece adjuntar foto (Sí/No).
 
 Puntos a tener en cuenta si se modifica:
 - La verificación de dueño de ticket usa `telegram_id` numérico, nunca username (evita que cualquiera adivine `/estado <id>` de otro). El mensaje de error es idéntico para "no existe" y "no te pertenece", para no filtrar existencia de IDs.
@@ -73,8 +73,9 @@ Import/export de `docs` es JSON plano (`{"entries": [...]}`), aceptado tanto por
 
 ### Convenciones del dashboard
 
-- Sin router: navegación por estado (`view: "tickets" | "docs"` en `App.tsx`), sin URLs de subpáginas.
+- Sin router: navegación por estado (`view: "tickets" | "docs" | "planta"` en `App.tsx`), sin URLs de subpáginas. Única excepción: `#area=<id>` abre la pestaña Planta con esa área seleccionada (lo usa el link "Ver en el plano" de `/areas`, si existe el secret `DASHBOARD_URL`).
 - Realtime: cada vista (`tickets`, `docs`) se suscribe a su tabla vía `supabase.channel(...).on("postgres_changes", ...)` y recarga con la misma función `load()` que usa el mount inicial.
 - Fechas: los tickets se agrupan por día calendario de Guatemala (`timezone.ts` → `gtDayKey`), no por el día local del navegador de quien vea el dashboard — importante para no correr un ticket nocturno al día siguiente.
 - Gráficas (`recharts`): se usa barra horizontal (`RankedBarChart.tsx`) en vez de pie chart para comparar categorías/personas — decisión explícita para datasets con muchos segmentos.
+- Croquis (`PlantaView.tsx`): las áreas son rectángulos en una cuadrícula de 60 × 30 celdas (`planUtils.ts`, `GRID_W`/`GRID_H`), con la entrada principal abajo. `FloorPlan.tsx` es el plano 2D editable (dibujar/mover/redimensionar con pointer events) y `Plant3D.tsx` la vista isométrica en SVG puro, sin librerías 3D (orden de pintado por eje separador en `paintOrder()`). Si cambia el ancho de la cuadrícula, actualizar también `PLANO_ANCHO` en el bot, que lo usa para decir "lado izquierdo/derecho".
 - Compresión de imágenes en cliente antes de subir a Storage: `imageUtils.ts` (`resizeImageFile`, Canvas API) — replica en el navegador lo que el bot hace server-side con `imagescript`, para no gastar la cuota gratuita de Storage.

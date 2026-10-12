@@ -101,11 +101,22 @@ Prueba escribiéndole a tu bot `/start` o `/nuevo` en Telegram.
 
 El plan gratuito pausa el proyecto tras 7 días sin actividad. El workflow [`keep-alive.yml`](.github/workflows/keep-alive.yml) hace una consulta liviana cada 3 días usando los mismos secrets del dashboard (`VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`), así que no requiere configuración extra. Puedes probarlo a mano desde **Actions > Keep Supabase alive > Run workflow**.
 
+## 7. Croquis de la planta (pestaña Planta)
+
+La migración `0011_areas.sql` crea la tabla `areas`. Las áreas se dibujan en el dashboard, en **Planta > ✏️ Editar plano**: arrastrando sobre el plano se crea un área, arrastrándola se mueve y desde su esquina se cambia el tamaño. El plano se dibuja con la entrada principal abajo, porque el bot usa eso para decir "lado izquierdo/derecho". También hay una **Vista 3D** isométrica con las dos plantas apiladas.
+
+Para que `/areas` incluya el link "Ver en el plano", configura la URL del dashboard:
+
+```bash
+supabase secrets set DASHBOARD_URL=https://tu-usuario.github.io/nombre-del-repo/
+```
+
 ## Flujo del bot
 
 Disponibles para cualquier usuario:
 
-- `/nuevo` — crea un ticket: selecciona categoría y prioridad con botones, luego pide la descripción (con vista previa editable antes de enviar).
+- `/nuevo` — crea un ticket: pregunta la planta y el área (si ya hay áreas dibujadas en el croquis), luego categoría y prioridad con botones, y al final la descripción (con vista previa editable antes de enviar).
+- `/areas [nombre]` — sin nombre lista las áreas por planta; con nombre (sin importar tildes) muestra dónde queda, cómo llegar, encargado, extensión y tickets abiertos, con link al plano si está configurado `DASHBOARD_URL`.
 - `/abiertos` — lista tus tickets abiertos o en progreso.
 - `/resueltos` — lista tus últimos tickets resueltos.
 - `/estado <id>` — detalle de un ticket y su historial (solo si es tuyo o eres el admin).
