@@ -14,8 +14,15 @@ export function formatGt(iso: string) {
   });
 }
 
+// "1:20 p. m." (sin cero adelante en la hora).
 export function formatGtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("es-GT", { timeZone: GT_TIMEZONE, hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("es-GT", { timeZone: GT_TIMEZONE, hour: "numeric", minute: "2-digit" });
+}
+
+// "a la 1:20 p. m." / "a las 12:45 p. m.": en español la una va en singular.
+export function aLaHora(iso: string) {
+  const hora = new Date(iso).toLocaleTimeString("en-US", { timeZone: GT_TIMEZONE, hour: "numeric", hour12: true });
+  return `${hora.startsWith("1 ") ? "a la" : "a las"} ${formatGtTime(iso)}`;
 }
 
 // Día de la semana en Guatemala (0 = domingo), mismo criterio que extract(dow).

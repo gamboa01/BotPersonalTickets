@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Almuerzo, Area, Ausencia, ExcepcionDia, JornadaDia, Rutina, RutinaRegistro, supabase, Tecnico, Ticket } from "../supabaseClient";
 import { NIVEL_LABEL, ladoArea } from "../planUtils";
-import { formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from "../timezone";
+import { aLaHora, formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from "../timezone";
 import { EquipoModal } from "./EquipoModal";
 import { RutinasModal } from "./RutinasModal";
 import { RegistrarAtencionModal } from "./RegistrarAtencionModal";
@@ -347,8 +347,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const avisoEquipo = !enAlmuerzo.length
     ? null
     : disponibles.length
-      ? `${unirNombres(enAlmuerzo.map((e) => `${e.tecnico.nombre} (regresa ${formatGtTime(e.almuerzo!.fin)})`))} en almuerzo · ${unirNombres(disponibles.map((e) => e.tecnico.nombre))} ${disponibles.length > 1 ? "pueden" : "puede"} atenderte`
-      : `Estamos en almuerzo · Regresamos a las ${formatGtTime(regresoEquipo!)}`;
+      ? `${unirNombres(enAlmuerzo.map((e) => `${e.tecnico.nombre} regresa ${aLaHora(e.almuerzo!.fin)}`))} · ${unirNombres(disponibles.map((e) => e.tecnico.nombre))} ${disponibles.length > 1 ? "pueden" : "puede"} atenderte`
+      : `Estamos en almuerzo · Regresamos ${aLaHora(regresoEquipo!)}`;
 
   const todosEnAlmuerzo = enAlmuerzo.length > 0 && disponibles.length === 0;
   const minutosParaRegreso = regresoEquipo
@@ -582,7 +582,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         <div className="almuerzo-overlay">
           <UtensilsCrossed className="almuerzo-icono" />
           <h2>Estamos en tiempo de almuerzo</h2>
-          <p className="almuerzo-regreso">Regresamos a las {formatGtTime(regresoEquipo!)}</p>
+          <p className="almuerzo-regreso">Regresamos {aLaHora(regresoEquipo!)}</p>
           <p className="almuerzo-falta">
             {minutosParaRegreso <= 1 ? "En un momento" : `En ${minutosParaRegreso} minutos`}
           </p>
