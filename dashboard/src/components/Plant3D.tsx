@@ -3,9 +3,9 @@ import { GRID_H, GRID_W, areaColor } from "../planUtils";
 
 // Proyección isométrica simple (sin librerías 3D): x hacia abajo-derecha,
 // y hacia abajo-izquierda, z hacia arriba. La entrada (y = GRID_H) queda al frente.
-const S = 11;
+const S = 5.5;
 const COS30 = Math.cos(Math.PI / 6);
-const LEVEL_H = 5; // altura de cada planta, en celdas
+const LEVEL_H = 10; // altura de cada planta, en celdas
 const PAD = 30;
 
 function iso(x: number, y: number, z: number): [number, number] {
@@ -27,9 +27,9 @@ function shade(hex: string, amount: number) {
 // Altura del bloque según el tipo: departamentos como cuartos, el piso de
 // producción casi plano (es espacio abierto) y las referencias bajitas.
 function boxHeight(area: Area) {
-  if (area.tipo === "produccion") return 0.6;
-  if (area.tipo === "referencia") return 1.5;
-  return LEVEL_H - 1.2;
+  if (area.tipo === "produccion") return 1.2;
+  if (area.tipo === "referencia") return 3;
+  return LEVEL_H - 2.4;
 }
 
 type Box = { area: Area; x0: number; x1: number; y0: number; y1: number; z0: number; z1: number };
@@ -176,9 +176,11 @@ export function Plant3D({ areas, focus, selectedId, matchIds, openCounts, onSele
               style={{ fill: shade(color, selected ? 0.6 : 0.42), stroke: selected ? "#fff" : color }}
               className="iso-face iso-face-top"
             />
-            <text x={lx} y={ly} className="iso-label">
-              {area.nombre}
-            </text>
+            {(area.tipo !== "referencia" || selected) && (
+              <text x={lx} y={ly} className="iso-label">
+                {area.nombre}
+              </text>
+            )}
             {abiertos > 0 && (
               <g className="plan-badge" pointerEvents="none">
                 <circle cx={lx} cy={ly - 16} r={8} />

@@ -1,9 +1,9 @@
 import { Area, AreaTipo } from "./supabaseClient";
 
-// Cuadrícula del croquis: 60 x 30 celdas, con la entrada principal abajo.
-// Debe coincidir con PLANO_ANCHO en el bot (supabase/functions/telegram-bot).
-export const GRID_W = 60;
-export const GRID_H = 30;
+// Cuadrícula del croquis: 120 x 60 celdas (desde 0023; antes 60 x 30), con la
+// entrada de referencia abajo. Debe coincidir con PLANO_ANCHO en el bot.
+export const GRID_W = 120;
+export const GRID_H = 60;
 
 export const NIVEL_LABEL: Record<1 | 2, string> = { 1: "Planta baja", 2: "Planta alta" };
 

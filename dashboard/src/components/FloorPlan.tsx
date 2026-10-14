@@ -3,7 +3,8 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { Area } from "../supabaseClient";
 import { GRID_H, GRID_W, areaColor, clampRect } from "../planUtils";
 
-const CELL = 20;
+// 10 px por celda: con la cuadrícula de 120 x 60 el plano mide lo mismo que antes.
+const CELL = 10;
 const PAD = 24;
 const FOOT = 30; // espacio bajo el plano para la etiqueta de la entrada
 const VB_W = GRID_W * CELL + PAD * 2;
@@ -237,7 +238,7 @@ export function FloorPlan({
         const py = PAD + r.y * CELL;
         const pw = r.w * CELL;
         const ph = r.h * CELL;
-        const fontSize = r.w <= 4 || r.h <= 2 ? 15 : area.tipo === "produccion" ? 30 : 21;
+        const fontSize = r.w <= 8 || r.h <= 3 ? 13 : area.tipo === "produccion" ? 30 : 18;
         const maxChars = Math.max(3, Math.floor(pw / (fontSize * 0.58)) - 1);
         const maxLines = Math.max(1, Math.floor((ph - 6) / (fontSize * 1.2)));
         const lines = wrapLabel(area.nombre, maxChars, maxLines);

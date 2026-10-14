@@ -184,7 +184,11 @@ export function PlantaView({ tickets, initialAreaId, onOpenTicket }: PlantaViewP
   if (loading) return <div className="empty-state">Cargando plano...</div>;
   if (error) return <div className="empty-state">Error al cargar el plano: {error}</div>;
 
-  const listaNivel = areas.filter((a) => a.nivel === nivel && (!matchIds || matchIds.has(a.id)));
+  // La lista lateral muestra departamentos y producción (gradas, baños y demás
+  // referencias se ven en el plano); al buscar, también las referencias.
+  const enLista = (a: Area) => (a.tipo !== "referencia" || !!matchIds) && (!matchIds || matchIds.has(a.id));
+  const porNombre = (a: Area, b: Area) => a.nombre.localeCompare(b.nombre, "es");
+  const listaNivel = areas.filter((a) => a.nivel === nivel && enLista(a)).sort(porNombre);
   const ticketsDelArea = selected ? openTicketsByArea.get(selected.id) ?? [] : [];
 
   return (
@@ -368,7 +372,7 @@ export function PlantaView({ tickets, initialAreaId, onOpenTicket }: PlantaViewP
               </p>
             )}
             <ul className="area-list">
-              {(modo === "3d" ? areas.filter((a) => !matchIds || matchIds.has(a.id)) : listaNivel).map((a) => (
+              {(modo === "3d" ? areas.filter(enLista).sort(porNombre) : listaNivel).map((a) => (
                 <li key={a.id}>
                   <button onClick={() => selectArea(a.id)}>
                     <span className="area-card-dot" style={{ background: areaColor(a) }} />

@@ -90,7 +90,7 @@ function categoryRows(categorias: any[]) {
 const NIVEL_LABEL: Record<number, string> = { 1: "Planta baja", 2: "Planta alta" };
 // Ancho de la cuadrícula del croquis (ver 0011_areas.sql); el plano se dibuja
 // con la entrada principal abajo, así que izquierda/derecha son vistas desde ahí.
-const PLANO_ANCHO = 60;
+const PLANO_ANCHO = 120;
 const DASHBOARD_URL = Deno.env.get("DASHBOARD_URL");
 
 // deno-lint-ignore no-explicit-any
@@ -139,9 +139,12 @@ function buscarAreas<T extends { nombre: string }>(texto: string, areas: T[]): T
     return siglas && (siglas === buscado || siglas === sinRepetir);
   });
   if (porSiglas.length) return porSiglas;
+  // Parcial por palabras: cada palabra escrita debe ser el inicio de alguna
+  // palabra del nombre ("corte" → "Oficinas de corte"; "it" no → "Auditoría").
+  const palabras = buscado.split(" ");
   return areas.filter((a) => {
-    const clave = claveArea(a.nombre);
-    return clave && (clave.includes(buscado) || buscado.includes(clave));
+    const delNombre = claveArea(a.nombre).split(" ");
+    return palabras.every((p) => delNombre.some((w) => w.startsWith(p)));
   });
 }
 
