@@ -117,6 +117,10 @@ La migración `0012_equipo_rutinas.sql` agrega el equipo de TI (`tecnicos`), la 
 
 Para la TV de TI abre el dashboard con `#pantalla` al final de la URL (o el botón **📺 Abrir en pantalla**): muestra solo la pantalla del día, en grande y sin controles. Inicia sesión una vez en ese navegador; la sesión se conserva.
 
+### Rutinas y calendario
+
+En **Hoy > ⚙️ Rutinas** se crean y editan las rutinas: hora fija o "según la hora de salida" (se ajusta sola), días de la semana y responsable. En la pestaña **Calendario** se define el horario base (qué días se trabaja y a qué hora se sale) y los días especiales: descansos (no aparece ninguna rutina), reposiciones en día libre (con las rutinas de otro día) o un día con otra hora de salida.
+
 ## Flujo del bot
 
 Disponibles para cualquier usuario:

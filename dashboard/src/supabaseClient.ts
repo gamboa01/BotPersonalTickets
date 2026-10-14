@@ -103,6 +103,26 @@ export interface Rutina {
   tecnico_id: number | null;
   activo: boolean;
   orden: number;
+  // 'fija' usa `hora`; 'salida' usa la hora de salida del día + minutos_salida.
+  referencia: "fija" | "salida";
+  minutos_salida: number;
+  created_at: string;
+}
+
+// Horario base por día de la semana (0 = domingo … 6 = sábado).
+export interface JornadaDia {
+  dia: number;
+  laboral: boolean;
+  hora_salida: string | null;
+}
+
+// Descanso, reposición u otra hora de salida para una fecha concreta.
+export interface ExcepcionDia {
+  fecha: string;
+  laboral: boolean;
+  hora_salida: string | null;
+  como_dia: number | null;
+  nota: string | null;
   created_at: string;
 }
 

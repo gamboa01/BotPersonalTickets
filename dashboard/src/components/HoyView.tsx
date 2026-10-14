@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Area, Rutina, RutinaRegistro, supabase, Tecnico, Ticket } from "../supabaseClient";
+import { Area, ExcepcionDia, JornadaDia, Rutina, RutinaRegistro, supabase, Tecnico, Ticket } from "../supabaseClient";
 import { NIVEL_LABEL, ladoArea } from "../planUtils";
 import { formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from "../timezone";
 import { EquipoModal } from "./EquipoModal";
+import { RutinasModal } from "./RutinasModal";
+import { diaInfo, rutinasDelDia } from "../rutinasUtils";
 
 interface HoyViewProps {
   tickets: Ticket[];
@@ -64,6 +66,9 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const [areas, setAreas] = useState<Area[]>([]);
   const [rutinas, setRutinas] = useState<Rutina[]>([]);
   const [registros, setRegistros] = useState<RutinaRegistro[]>([]);
+  const [jornada, setJornada] = useState<JornadaDia[]>([]);
+  const [excepciones, setExcepciones] = useState<ExcepcionDia[]>([]);
+  const [showRutinas, setShowRutinas] = useState(false);
   const [recientes, setRecientes] = useState<Map<number, number>>(new Map());
   const [sonido, setSonido] = useState(readSoundPref);
   const [showEquipo, setShowEquipo] = useState(false);
@@ -83,16 +88,27 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       setAreas((data ?? []) as Area[]);
     }
     async function loadRutinas() {
-      const { data } = await supabase.from("rutinas").select("*").eq("activo", true).order("orden");
+      const { data } = await supabase.from("rutinas").select("*").order("orden");
       setRutinas((data ?? []) as Rutina[]);
+    }
+    async function loadCalendario() {
+      const [{ data: j }, { data: e }] = await Promise.all([
+        supabase.from("jornada_semana").select("*"),
+        supabase.from("calendario_excepciones").select("*"),
+      ]);
+      setJornada((j ?? []) as JornadaDia[]);
+      setExcepciones((e ?? []) as ExcepcionDia[]);
     }
     loadAreas();
     loadRutinas();
+    loadCalendario();
 
     const channel = supabase
       .channel("hoy-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "areas" }, loadAreas)
       .on("postgres_changes", { event: "*", schema: "public", table: "rutinas" }, loadRutinas)
+      .on("postgres_changes", { event: "*", schema: "public", table: "jornada_semana" }, loadCalendario)
+      .on("postgres_changes", { event: "*", schema: "public", table: "calendario_excepciones" }, loadCalendario)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -163,12 +179,12 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     ];
   }, [tecnicos, activos]);
 
-  const rutinasHoy = useMemo(() => {
-    const dow = gtWeekday(new Date(now));
-    return rutinas
-      .filter((r) => r.dias.includes(dow))
-      .sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99") || a.orden - b.orden);
-  }, [rutinas, now]);
+  // Descanso, reposición u hora de salida distinta: lo decide el calendario.
+  const infoHoy = useMemo(
+    () => diaInfo(hoy, gtWeekday(new Date(now)), jornada, excepciones),
+    [hoy, now, jornada, excepciones]
+  );
+  const rutinasHoy = useMemo(() => rutinasDelDia(rutinas, infoHoy), [rutinas, infoHoy]);
   const registroByRutina = new Map(registros.map((r) => [r.rutina_id, r]));
   const tecnicoById = new Map(tecnicos.map((t) => [t.id, t]));
 
@@ -212,6 +228,12 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   });
   const fecha = fechaLarga.charAt(0).toUpperCase() + fechaLarga.slice(1);
   const hora = new Date(now).toLocaleTimeString("es-GT", { timeZone: GT_TIMEZONE, hour: "2-digit", minute: "2-digit" });
+  // HH:MM de 24 h, para comparar con la hora de cada rutina y marcar las atrasadas.
+  const hhmm = new Date(now).toLocaleTimeString("en-GB", { timeZone: GT_TIMEZONE, hour: "2-digit", minute: "2-digit" });
+  const nota = infoHoy.excepcion?.nota;
+  const jornadaTexto = infoHoy.laboral
+    ? [infoHoy.salida && `Salida ${infoHoy.salida}`, nota].filter(Boolean).join(" · ")
+    : `Descanso${nota && nota !== "Descanso" ? ` · ${nota}` : ""}`;
 
   function renderCard(t: Ticket) {
     const area = t.area_id ? areaById.get(t.area_id) : undefined;
@@ -269,7 +291,12 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       <header className="hoy-header">
         <div>
           <h2 className="hoy-title">Atenciones de hoy</h2>
-          <p className="hoy-date">{fecha}</p>
+          <p className="hoy-date">
+            {fecha}
+            {jornadaTexto && (
+              <span className={`hoy-jornada${infoHoy.laboral ? "" : " descanso"}`}>{jornadaTexto}</span>
+            )}
+          </p>
         </div>
         <div className="hoy-stats">
           <div>
@@ -298,6 +325,9 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             <>
               <button className="action-button" onClick={() => setShowEquipo(true)}>
                 👥 Equipo
+              </button>
+              <button className="action-button" onClick={() => setShowRutinas(true)}>
+                ⚙️ Rutinas
               </button>
               <a className="action-button" href="#pantalla" target="_blank" rel="noreferrer">
                 📺 Abrir en pantalla
@@ -348,24 +378,38 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       </div>
 
       <section className="hoy-rutinas">
-        <h3>Rutinas de hoy</h3>
+        <h3>
+          Rutinas de hoy
+          {rutinasHoy.length > 0 && (
+            <span className="hoy-rutinas-count">
+              {rutinasHoy.filter(({ rutina }) => registroByRutina.has(rutina.id)).length}/{rutinasHoy.length}
+            </span>
+          )}
+        </h3>
         {rutinasHoy.length === 0 ? (
-          <p className="hoy-empty">Sin rutinas configuradas todavía.</p>
+          <p className="hoy-empty">
+            {!infoHoy.laboral
+              ? "Hoy es día de descanso: no hay rutinas."
+              : rutinas.length
+                ? "No hay rutinas para hoy."
+                : "Sin rutinas configuradas todavía."}
+          </p>
         ) : (
           <div className="hoy-rutinas-list">
-            {rutinasHoy.map((r) => {
+            {rutinasHoy.map(({ rutina: r, hora: horaRutina }) => {
               const registro = registroByRutina.get(r.id);
               const tecnico = r.tecnico_id ? tecnicoById.get(r.tecnico_id) : undefined;
+              const atrasada = !registro && !!horaRutina && horaRutina < hhmm;
               return (
                 <button
                   key={r.id}
-                  className={`hoy-rutina${registro ? " done" : ""}`}
+                  className={`hoy-rutina${registro ? " done" : ""}${atrasada ? " atrasada" : ""}`}
                   onClick={() => toggleRutina(r)}
                   disabled={kiosk}
                   title={r.descripcion ?? undefined}
                 >
                   <span className="hoy-rutina-check">{registro ? "✅" : "⬜"}</span>
-                  {r.hora && <span className="hoy-rutina-hora">{r.hora}</span>}
+                  {horaRutina && <span className="hoy-rutina-hora">{horaRutina}</span>}
                   <span className="hoy-rutina-nombre">{r.nombre}</span>
                   {tecnico && (
                     <span className="hoy-rutina-tec" style={{ color: tecnico.color || undefined }}>
@@ -381,6 +425,16 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       </section>
 
       {showEquipo && <EquipoModal tecnicos={tecnicos} onClose={() => setShowEquipo(false)} />}
+      {showRutinas && (
+        <RutinasModal
+          rutinas={rutinas}
+          tecnicos={tecnicos}
+          jornada={jornada}
+          excepciones={excepciones}
+          hoy={hoy}
+          onClose={() => setShowRutinas(false)}
+        />
+      )}
     </div>
   );
 }
