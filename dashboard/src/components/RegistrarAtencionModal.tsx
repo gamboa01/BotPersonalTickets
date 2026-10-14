@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { Area, Categoria, Prioridad, supabase, Tecnico } from "../supabaseClient";
+import { Area, Categoria, Prioridad, supabase, Tecnico, Ticket } from "../supabaseClient";
 import { NIVEL_LABEL } from "../planUtils";
 import { GT_TIMEZONE } from "../timezone";
 
 interface RegistrarAtencionModalProps {
-  areas: Area[];
+  // Si no se pasan, el modal las carga (p. ej. al editar desde la pestaña Tickets).
+  areas?: Area[];
   tecnicos: Tecnico[];
+  // Con ticket, el mismo formulario sirve para editarlo (editar_ticket()).
+  ticket?: Ticket;
   onClose: () => void;
 }
 
@@ -17,9 +20,12 @@ const PRIORIDADES: { value: Prioridad; label: string }[] = [
   { value: "critica", label: "🔴 Crítica" },
 ];
 
-// Valor para <input type="datetime-local"> con la hora actual de Guatemala.
-function ahoraGt() {
-  return new Date().toLocaleString("sv-SE", { timeZone: GT_TIMEZONE }).replace(" ", "T").slice(0, 16);
+// Valor para <input type="datetime-local"> en hora de Guatemala (por defecto, ahora).
+function ahoraGt(iso?: string) {
+  return (iso ? new Date(iso) : new Date())
+    .toLocaleString("sv-SE", { timeZone: GT_TIMEZONE })
+    .replace(" ", "T")
+    .slice(0, 16);
 }
 
 // Guatemala no tiene horario de verano: siempre UTC-6.
@@ -35,21 +41,24 @@ function leerTecnicoGuardado() {
   }
 }
 
-export function RegistrarAtencionModal({ areas, tecnicos, onClose }: RegistrarAtencionModalProps) {
-  const activos = tecnicos.filter((t) => t.activo);
+export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onClose }: RegistrarAtencionModalProps) {
+  const activos = tecnicos.filter((t) => t.activo || t.id === ticket?.asignado_id);
   const guardado = leerTecnicoGuardado();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [areaId, setAreaId] = useState<number | null>(null);
-  const [categoriaId, setCategoriaId] = useState<number | null>(null);
-  const [descripcion, setDescripcion] = useState("");
-  const [pidio, setPidio] = useState("");
+  const [areasCargadas, setAreasCargadas] = useState<Area[]>([]);
+  const areas = areasProp ?? areasCargadas;
+  const [areaId, setAreaId] = useState<number | null>(ticket?.area_id ?? null);
+  const [categoriaId, setCategoriaId] = useState<number | null>(ticket?.categoria_id ?? null);
+  const [descripcion, setDescripcion] = useState(ticket?.descripcion ?? "");
+  const [pidio, setPidio] = useState(ticket?.reportado_por_nombre ?? "");
   const [tecnicoId, setTecnicoId] = useState<number | null>(
-    activos.some((t) => t.id === guardado) ? guardado : activos[0]?.id ?? null
+    ticket ? ticket.asignado_id : activos.some((t) => t.id === guardado) ? guardado : activos[0]?.id ?? null
   );
-  const [prioridad, setPrioridad] = useState<Prioridad>("media");
-  const [creado, setCreado] = useState(ahoraGt);
-  const [resuelto, setResuelto] = useState(true);
-  const [resueltoAt, setResueltoAt] = useState(ahoraGt);
+  const [prioridad, setPrioridad] = useState<Prioridad>(ticket?.prioridad ?? "media");
+  const [creado, setCreado] = useState(() => ahoraGt(ticket?.created_at));
+  // Al editar, el estado no cambia aquí (para eso están Resolver / Reabrir / Anular).
+  const [resuelto, setResuelto] = useState(ticket ? !!ticket.resolved_at : true);
+  const [resueltoAt, setResueltoAt] = useState(() => ahoraGt(ticket?.resolved_at ?? undefined));
   const [resolucion, setResolucion] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -60,7 +69,13 @@ export function RegistrarAtencionModal({ areas, tecnicos, onClose }: RegistrarAt
       .select("*")
       .order("id")
       .then(({ data }) => setCategorias((data ?? []) as Categoria[]));
-  }, []);
+    if (!areasProp) {
+      supabase
+        .from("areas")
+        .select("*")
+        .then(({ data }) => setAreasCargadas((data ?? []) as Area[]));
+    }
+  }, [areasProp]);
 
   const areasElegibles = areas.filter((a) => a.tipo !== "referencia").sort((a, b) => a.nombre.localeCompare(b.nombre));
 
@@ -68,6 +83,28 @@ export function RegistrarAtencionModal({ areas, tecnicos, onClose }: RegistrarAt
     if (!descripcion.trim()) return setError("Escribe qué pasó o qué se hizo.");
     if (resuelto && resueltoAt < creado) return setError("La hora de cierre no puede ser antes de la de inicio.");
     setSaving(true);
+    if (ticket) {
+      const { error } = await supabase.rpc("editar_ticket", {
+        p_ticket_id: ticket.id,
+        p_descripcion: descripcion.trim(),
+        p_area_id: areaId,
+        p_categoria_id: categoriaId,
+        p_prioridad: prioridad,
+        p_reportado_por_nombre: pidio.trim() || null,
+        p_creado: gtLocalToIso(creado),
+        p_resuelto_at: ticket.resolved_at ? gtLocalToIso(resueltoAt) : null,
+      });
+      if (!error && tecnicoId !== ticket.asignado_id) {
+        const res = await supabase.rpc("asignar_ticket", { p_ticket_id: ticket.id, p_tecnico_id: tecnicoId });
+        if (res.error) {
+          setSaving(false);
+          return setError(`Se guardó, pero no se pudo cambiar quién atiende: ${res.error.message}`);
+        }
+      }
+      setSaving(false);
+      if (error) return setError(`No se pudo guardar: ${error.message}`);
+      return onClose();
+    }
     const { error } = await supabase.rpc("registrar_atencion", {
       p_descripcion: descripcion.trim(),
       p_area_id: areaId,
@@ -94,7 +131,7 @@ export function RegistrarAtencionModal({ areas, tecnicos, onClose }: RegistrarAt
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal doc-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Registrar atención</h2>
+          <h2>{ticket ? `Editar ticket #${ticket.id}` : "Registrar atención"}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
             ✕
           </button>
@@ -194,12 +231,21 @@ export function RegistrarAtencionModal({ areas, tecnicos, onClose }: RegistrarAt
           </div>
         </div>
 
-        <label className="equipo-activo atencion-resuelto">
-          <input type="checkbox" checked={resuelto} onChange={(e) => setResuelto(e.target.checked)} />
-          Ya quedó resuelto
-        </label>
+        {ticket ? (
+          ticket.resolved_at && (
+            <div className="doc-field">
+              <label htmlFor="atResAt">Cuándo se resolvió</label>
+              <input id="atResAt" type="datetime-local" value={resueltoAt} onChange={(e) => setResueltoAt(e.target.value)} />
+            </div>
+          )
+        ) : (
+          <label className="equipo-activo atencion-resuelto">
+            <input type="checkbox" checked={resuelto} onChange={(e) => setResuelto(e.target.checked)} />
+            Ya quedó resuelto
+          </label>
+        )}
 
-        {resuelto ? (
+        {ticket ? null : resuelto ? (
           <div className="doc-grid2">
             <div className="doc-field">
               <label htmlFor="atRes">Qué se hizo (opcional)</label>
@@ -229,7 +275,7 @@ export function RegistrarAtencionModal({ areas, tecnicos, onClose }: RegistrarAt
               Cancelar
             </button>
             <button className="action-button action-button-primary" onClick={guardar} disabled={saving}>
-              {saving ? "Guardando..." : "Registrar"}
+              {saving ? "Guardando..." : ticket ? "Guardar cambios" : "Registrar"}
             </button>
           </div>
         </div>

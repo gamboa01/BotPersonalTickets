@@ -11,6 +11,7 @@ const ESTADO_LABEL: Record<Ticket["estado"], string> = {
   en_progreso: "En progreso",
   resuelto: "Resuelto",
   cerrado: "Cerrado",
+  anulado: "Anulado",
 };
 
 export function TicketsTable({ tickets, onRowClick }: TicketsTableProps) {

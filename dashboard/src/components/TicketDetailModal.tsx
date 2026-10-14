@@ -3,11 +3,20 @@ import { Adjunto, Comentario, Tecnico, Ticket } from "../supabaseClient";
 import { formatGt } from "../timezone";
 import { botDeepLink } from "../telegram";
 
+export type TicketAccion = "resolver" | "reabrir" | "anular";
+
+const ACCION_UI: Record<TicketAccion, { placeholder: string; boton: string }> = {
+  resolver: { placeholder: "Qué se hizo (opcional)", boton: "Marcar resuelto" },
+  reabrir: { placeholder: "Por qué se reabre (opcional)", boton: "Reabrir" },
+  anular: { placeholder: "Motivo, p. ej. duplicado del #12 (opcional)", boton: "Anular ticket" },
+};
+
 interface TicketDetailModalProps {
   ticket: Ticket;
   tecnicos: Tecnico[];
   onAssign: (ticketId: number, tecnicoId: number | null) => void;
-  onResolve: (ticketId: number, nota: string) => Promise<boolean>;
+  onAction: (accion: TicketAccion, ticketId: number, texto: string) => Promise<boolean>;
+  onEdit: () => void;
   comentarios: Comentario[];
   adjuntos: Adjunto[];
   loadingComentarios: boolean;
@@ -18,24 +27,29 @@ export function TicketDetailModal({
   ticket,
   tecnicos,
   onAssign,
-  onResolve,
+  onAction,
+  onEdit,
   comentarios,
   adjuntos,
   loadingComentarios,
   onClose,
 }: TicketDetailModalProps) {
-  const [resolviendo, setResolviendo] = useState(false);
-  const [nota, setNota] = useState("");
+  const [accion, setAccion] = useState<TicketAccion | null>(null);
+  const [texto, setTexto] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const pendiente = ticket.estado === "abierto" || ticket.estado === "en_progreso";
 
-  async function resolver() {
+  function abrir(nueva: TicketAccion) {
+    setAccion(nueva);
+    setTexto("");
+  }
+
+  async function confirmar() {
+    if (!accion) return;
     setGuardando(true);
-    const ok = await onResolve(ticket.id, nota);
+    const ok = await onAction(accion, ticket.id, texto);
     setGuardando(false);
-    if (ok) {
-      setResolviendo(false);
-      setNota("");
-    }
+    if (ok) setAccion(null);
   }
 
   return (
@@ -91,48 +105,60 @@ export function TicketDetailModal({
         </dl>
 
         <div className="modal-actions">
-          {(ticket.estado === "abierto" || ticket.estado === "en_progreso") && (
-            <>
-              <a className="action-button" href={botDeepLink("seguimiento", ticket.id)} target="_blank" rel="noreferrer">
-                🔧 Dar seguimiento
-              </a>
-              <button className="action-button action-button-primary" onClick={() => setResolviendo(true)}>
-                ✅ Resolver
-              </button>
-              {/* Por el bot se avisa por Telegram a quien lo reportó; desde aquí no. */}
-              {ticket.reportado_por !== 0 && (
-                <a className="action-button" href={botDeepLink("resolver", ticket.id)} target="_blank" rel="noreferrer">
-                  ✅ Resolver por Telegram
-                </a>
-              )}
-            </>
+          {pendiente && (
+            <button className="action-button action-button-primary" onClick={() => abrir("resolver")}>
+              ✅ Resolver
+            </button>
           )}
-          {(ticket.estado === "resuelto" || ticket.estado === "cerrado") && (
-            <a className="action-button" href={botDeepLink("reabrir", ticket.id)} target="_blank" rel="noreferrer">
+          {!pendiente && (
+            <button className="action-button action-button-primary" onClick={() => abrir("reabrir")}>
               🔁 Reabrir
+            </button>
+          )}
+          <button className="action-button" onClick={onEdit}>
+            ✏️ Editar
+          </button>
+          {pendiente && (
+            <a className="action-button" href={botDeepLink("seguimiento", ticket.id)} target="_blank" rel="noreferrer">
+              🔧 Seguimiento (bot)
             </a>
           )}
           <a className="action-button" href={botDeepLink("foto", ticket.id)} target="_blank" rel="noreferrer">
-            📎 Adjuntar foto
+            📎 Foto (bot)
           </a>
+          {ticket.estado !== "anulado" && (
+            <button className="action-button doc-danger" onClick={() => abrir("anular")}>
+              🚫 Anular
+            </button>
+          )}
         </div>
 
-        {resolviendo && (
+        {accion && (
           <div className="resolver-inline">
             <input
               type="text"
-              value={nota}
-              onChange={(e) => setNota(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && resolver()}
-              placeholder="Qué se hizo (opcional)"
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && confirmar()}
+              placeholder={ACCION_UI[accion].placeholder}
               autoFocus
             />
-            <button className="action-button action-button-primary" onClick={resolver} disabled={guardando}>
-              {guardando ? "Guardando..." : "Marcar resuelto"}
+            <button
+              className={`action-button ${accion === "anular" ? "doc-danger" : "action-button-primary"}`}
+              onClick={confirmar}
+              disabled={guardando}
+            >
+              {guardando ? "Guardando..." : ACCION_UI[accion].boton}
             </button>
-            <button className="action-button" onClick={() => setResolviendo(false)}>
+            <button className="action-button" onClick={() => setAccion(null)}>
               Cancelar
             </button>
+            {accion === "anular" && (
+              <span className="doc-hint">
+                El ticket no se borra: queda en el historial, pero deja de contar en estadísticas y en Hoy. Se puede
+                reabrir.
+              </span>
+            )}
           </div>
         )}
 

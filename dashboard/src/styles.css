@@ -2187,3 +2187,9 @@ mark {
   color: var(--text);
   font-family: inherit;
 }
+
+.badge-anulado {
+  background: rgba(139, 147, 167, 0.1);
+  color: var(--text-muted);
+  text-decoration: line-through;
+}

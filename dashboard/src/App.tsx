@@ -5,7 +5,8 @@ import { KpiCard } from "./components/KpiCard";
 import { RankedBarChart } from "./components/RankedBarChart";
 import { TrendChart } from "./components/TrendChart";
 import { TicketsTable } from "./components/TicketsTable";
-import { TicketDetailModal } from "./components/TicketDetailModal";
+import { TicketAccion, TicketDetailModal } from "./components/TicketDetailModal";
+import { RegistrarAtencionModal } from "./components/RegistrarAtencionModal";
 import { Login } from "./components/Login";
 import { RegistrarTicket } from "./components/RegistrarTicket";
 import { DocsView } from "./components/DocsView";
@@ -47,6 +48,7 @@ export default function App() {
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [loadingComentarios, setLoadingComentarios] = useState(false);
   const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
+  const [editando, setEditando] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -109,13 +111,17 @@ export default function App() {
     };
   }, [session]);
 
+  // Los anulados (creados por error o duplicados) no cuentan en estadísticas,
+  // Hoy ni Planta; solo se ven en la tabla con el filtro "Anulados".
+  const vigentes = useMemo(() => tickets.filter((t) => t.estado !== "anulado"), [tickets]);
+
   const stats = useMemo(() => {
-    const abiertos = tickets.filter((t) => t.estado === "abierto").length;
-    const enProgreso = tickets.filter((t) => t.estado === "en_progreso").length;
-    const resueltos = tickets.filter((t) => t.estado === "resuelto" || t.estado === "cerrado").length;
+    const abiertos = vigentes.filter((t) => t.estado === "abierto").length;
+    const enProgreso = vigentes.filter((t) => t.estado === "en_progreso").length;
+    const resueltos = vigentes.filter((t) => t.estado === "resuelto" || t.estado === "cerrado").length;
     const pendientes = abiertos + enProgreso;
 
-    const tiemposResolucion = tickets
+    const tiemposResolucion = vigentes
       .filter((t) => t.resolved_at)
       .map((t) => (new Date(t.resolved_at!).getTime() - new Date(t.created_at).getTime()) / 3600000);
     const promedioResolucion =
@@ -123,21 +129,21 @@ export default function App() {
         ? tiemposResolucion.reduce((a, b) => a + b, 0) / tiemposResolucion.length
         : null;
 
-    return { total: tickets.length, abiertos, enProgreso, resueltos, pendientes, promedioResolucion };
-  }, [tickets]);
+    return { total: vigentes.length, abiertos, enProgreso, resueltos, pendientes, promedioResolucion };
+  }, [vigentes]);
 
   const categoryData = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const t of tickets) {
+    for (const t of vigentes) {
       const nombre = t.categorias?.nombre ?? "Sin categoría";
       counts.set(nombre, (counts.get(nombre) ?? 0) + 1);
     }
     return Array.from(counts.entries()).map(([nombre, total]) => ({ nombre, total }));
-  }, [tickets]);
+  }, [vigentes]);
 
   const areaData = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const t of tickets) {
+    for (const t of vigentes) {
       const nombre = t.areas?.nombre ?? "Sin área";
       counts.set(nombre, (counts.get(nombre) ?? 0) + 1);
     }
@@ -145,11 +151,11 @@ export default function App() {
       .map(([nombre, total]) => ({ nombre, total }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
-  }, [tickets]);
+  }, [vigentes]);
 
   const reporterData = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const t of tickets) {
+    for (const t of vigentes) {
       const nombre = t.reportado_por_nombre ?? "Sin nombre";
       counts.set(nombre, (counts.get(nombre) ?? 0) + 1);
     }
@@ -157,7 +163,7 @@ export default function App() {
       .map(([nombre, total]) => ({ nombre, total }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
-  }, [tickets]);
+  }, [vigentes]);
 
   const trendData = useMemo(() => {
     const days: { fecha: string; creados: number; resueltos: number }[] = [];
@@ -172,18 +178,18 @@ export default function App() {
       const dayKey = dayDate.toISOString().slice(0, 10);
       const label = dayDate.toLocaleDateString("es-GT", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 
-      const creados = tickets.filter((t) => gtDayKey(t.created_at) === dayKey).length;
-      const resueltos = tickets.filter((t) => t.resolved_at && gtDayKey(t.resolved_at) === dayKey).length;
+      const creados = vigentes.filter((t) => gtDayKey(t.created_at) === dayKey).length;
+      const resueltos = vigentes.filter((t) => t.resolved_at && gtDayKey(t.resolved_at) === dayKey).length;
 
       days.push({ fecha: label, creados, resueltos });
     }
     return days;
-  }, [tickets]);
+  }, [vigentes]);
 
   const filteredTickets = useMemo(() => {
-    if (filtroEstado === "todos") return tickets;
+    if (filtroEstado === "todos") return vigentes;
     return tickets.filter((t) => t.estado === filtroEstado);
-  }, [tickets, filtroEstado]);
+  }, [tickets, vigentes, filtroEstado]);
 
   async function openTicket(ticket: Ticket) {
     setSelectedTicket(ticket);
@@ -215,10 +221,16 @@ export default function App() {
     setComentarios((data ?? []) as Comentario[]);
   }
 
-  async function resolverTicket(ticketId: number, nota: string) {
-    const { error } = await supabase.rpc("resolver_ticket", { p_ticket_id: ticketId, p_nota: nota });
+  async function accionTicket(accion: TicketAccion, ticketId: number, texto: string) {
+    const { error } =
+      accion === "resolver"
+        ? await supabase.rpc("resolver_ticket", { p_ticket_id: ticketId, p_nota: texto })
+        : await supabase.rpc(accion === "anular" ? "anular_ticket" : "reabrir_ticket", {
+            p_ticket_id: ticketId,
+            p_motivo: texto,
+          });
     if (error) {
-      alert(`No se pudo resolver el ticket: ${error.message}`);
+      alert(`No se pudo completar la acción: ${error.message}`);
       return false;
     }
     const { data } = await supabase.from("comentarios").select("*").eq("ticket_id", ticketId).order("created_at");
@@ -229,7 +241,7 @@ export default function App() {
   if (KIOSK) {
     return (
       <div className="kiosk-root">
-        <HoyView tickets={tickets} tecnicos={tecnicos} kiosk onOpenTicket={() => {}} />
+        <HoyView tickets={vigentes} tecnicos={tecnicos} kiosk onOpenTicket={() => {}} />
       </div>
     );
   }
@@ -276,11 +288,11 @@ export default function App() {
       </header>
 
       {view === "hoy" ? (
-        <HoyView tickets={tickets} tecnicos={tecnicos} kiosk={false} onOpenTicket={openTicket} />
+        <HoyView tickets={vigentes} tecnicos={tecnicos} kiosk={false} onOpenTicket={openTicket} />
       ) : view === "docs" ? (
         <DocsView />
       ) : view === "planta" ? (
-        <PlantaView tickets={tickets} initialAreaId={initialAreaId} onOpenTicket={openTicket} />
+        <PlantaView tickets={vigentes} initialAreaId={initialAreaId} onOpenTicket={openTicket} />
       ) : (
         <>
           <section className="kpi-grid">
@@ -324,6 +336,7 @@ export default function App() {
                 <option value="en_progreso">En progreso</option>
                 <option value="resuelto">Resueltos</option>
                 <option value="cerrado">Cerrados</option>
+                <option value="anulado">Anulados</option>
               </select>
             </div>
             <TicketsTable tickets={filteredTickets} onRowClick={openTicket} />
@@ -337,11 +350,29 @@ export default function App() {
           ticket={ticketAbierto}
           tecnicos={tecnicos}
           onAssign={asignarTicket}
-          onResolve={resolverTicket}
+          onAction={accionTicket}
+          onEdit={() => setEditando(true)}
           comentarios={comentarios}
           adjuntos={adjuntos}
           loadingComentarios={loadingComentarios}
           onClose={() => setSelectedTicket(null)}
+        />
+      )}
+
+      {ticketAbierto && editando && (
+        <RegistrarAtencionModal
+          tecnicos={tecnicos}
+          ticket={ticketAbierto}
+          onClose={async () => {
+            setEditando(false);
+            // La edición deja un comentario "Editado: …" en el historial.
+            const { data } = await supabase
+              .from("comentarios")
+              .select("*")
+              .eq("ticket_id", ticketAbierto.id)
+              .order("created_at");
+            setComentarios((data ?? []) as Comentario[]);
+          }}
         />
       )}
     </div>

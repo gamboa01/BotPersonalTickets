@@ -8,7 +8,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export type Prioridad = "baja" | "media" | "alta" | "critica";
-export type Estado = "abierto" | "en_progreso" | "resuelto" | "cerrado";
+export type Estado = "abierto" | "en_progreso" | "resuelto" | "cerrado" | "anulado";
 
 export interface Ticket {
   id: number;

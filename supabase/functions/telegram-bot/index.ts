@@ -716,7 +716,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         await sendMessage(chatId, `No existe el ticket #${id}`);
         break;
       }
-      if (ticket.estado === "resuelto" || ticket.estado === "cerrado") {
+      if (ticket.estado === "resuelto" || ticket.estado === "cerrado" || ticket.estado === "anulado") {
         await sendMessage(chatId, `El ticket #${id} ya está ${ticket.estado}.`);
         break;
       }
@@ -740,7 +740,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         await sendMessage(chatId, `No existe el ticket #${id}`);
         break;
       }
-      if (ticket.estado === "resuelto" || ticket.estado === "cerrado") {
+      if (ticket.estado === "resuelto" || ticket.estado === "cerrado" || ticket.estado === "anulado") {
         await sendMessage(chatId, `El ticket #${id} ya está ${ticket.estado}.`);
         break;
       }
