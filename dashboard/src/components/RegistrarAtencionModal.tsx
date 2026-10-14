@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Area, Categoria, Prioridad, supabase, Tecnico, Ticket } from "../supabaseClient";
 import { NIVEL_LABEL } from "../planUtils";
 import { GT_TIMEZONE } from "../timezone";
+import { ordenarCategorias } from "../categoriasUtils";
 import { Clock, X } from "lucide-react";
 
 interface RegistrarAtencionModalProps {
@@ -71,8 +72,7 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
     supabase
       .from("categorias")
       .select("*")
-      .order("id")
-      .then(({ data }) => setCategorias((data ?? []) as Categoria[]));
+      .then(({ data }) => setCategorias(ordenarCategorias((data ?? []) as Categoria[])));
     if (!areasProp) {
       supabase
         .from("areas")
@@ -169,7 +169,9 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
               onChange={(e) => setCategoriaId(e.target.value ? Number(e.target.value) : null)}
             >
               <option value="">Sin categoría</option>
-              {categorias.map((c) => (
+              {categorias
+                .filter((c) => c.activa || c.id === ticket?.categoria_id)
+                .map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nombre}
                 </option>

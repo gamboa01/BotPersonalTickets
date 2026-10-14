@@ -4,9 +4,10 @@ import { NIVEL_LABEL, ladoArea } from "../planUtils";
 import { aLaHora, formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from "../timezone";
 import { EquipoModal } from "./EquipoModal";
 import { RutinasModal } from "./RutinasModal";
+import { CategoriasModal } from "./CategoriasModal";
 import { RegistrarAtencionModal } from "./RegistrarAtencionModal";
 import { MARGEN_AUTO_MIN, ausenteA, cubrirAusencia, diaInfo, rutinasDelDia, sumarMinutos } from "../rutinasUtils";
-import { Bell, BellOff, Briefcase, Check, CircleCheck, CircleX, MapPin, Maximize, Plus, Repeat, Settings, Square, Tv, Users, UtensilsCrossed } from "lucide-react";
+import { Tags, Bell, BellOff, Briefcase, Check, CircleCheck, CircleX, MapPin, Maximize, Plus, Repeat, Settings, Square, Tv, Users, UtensilsCrossed } from "lucide-react";
 
 interface HoyViewProps {
   tickets: Ticket[];
@@ -90,6 +91,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const [jornada, setJornada] = useState<JornadaDia[]>([]);
   const [excepciones, setExcepciones] = useState<ExcepcionDia[]>([]);
   const [showRutinas, setShowRutinas] = useState(false);
+  const [showCategorias, setShowCategorias] = useState(false);
   const [showRegistrar, setShowRegistrar] = useState(false);
   const [ausencias, setAusencias] = useState<Ausencia[]>([]);
   const [almuerzos, setAlmuerzos] = useState<Almuerzo[]>([]);
@@ -628,6 +630,9 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
               <button className="action-button" onClick={() => setShowEquipo(true)}>
                 <Users size={15} /> Equipo
               </button>
+              <button className="action-button" onClick={() => setShowCategorias(true)}>
+                <Tags size={15} /> Categorías
+              </button>
               <button className="action-button" onClick={() => setShowRutinas(true)}>
                 <Settings size={15} /> Rutinas
               </button>
@@ -758,6 +763,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
 
 
       {showEquipo && <EquipoModal tecnicos={tecnicos} hoy={hoy} onClose={() => setShowEquipo(false)} />}
+      {showCategorias && <CategoriasModal onClose={() => setShowCategorias(false)} />}
       {showRegistrar && (
         <RegistrarAtencionModal areas={areas} tecnicos={tecnicos} onClose={() => setShowRegistrar(false)} />
       )}

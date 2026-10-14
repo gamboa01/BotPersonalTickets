@@ -33,6 +33,8 @@ export interface Ticket {
 export interface Categoria {
   id: number;
   nombre: string;
+  // Las inactivas no se ofrecen al crear tickets, pero los viejos la conservan.
+  activa: boolean;
 }
 
 export interface Comentario {

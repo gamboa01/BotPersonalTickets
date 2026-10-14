@@ -173,7 +173,8 @@ async function askCategory(
   telegramId: number,
   payload: { reportado_por_nombre?: string; area_id?: number | null }
 ) {
-  const { data: categoriasRaw } = await supabase.from("categorias").select("*").order("id");
+  // Solo las activas (se administran en el dashboard: Hoy > Categorías).
+  const { data: categoriasRaw } = await supabase.from("categorias").select("*").eq("activa", true).order("nombre");
   // "Otros" siempre al final, sin importar el orden de inserción.
   const categorias = [...(categoriasRaw ?? [])].sort((a, b) =>
     a.nombre === "Otros" ? 1 : b.nombre === "Otros" ? -1 : 0
