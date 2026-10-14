@@ -69,43 +69,6 @@ header h1 {
   flex-wrap: wrap;
 }
 
-.registrar-form {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-}
-
-.registrar-form input {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel-alt);
-  color: var(--text);
-  font-size: 13px;
-  width: 180px;
-}
-
-.registrar-form input:focus {
-  outline: none;
-  border-color: var(--neon-cyan);
-}
-
-.registrar-form button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.registrar-error {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--neon-red);
-  white-space: nowrap;
-}
-
 .modal-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2192,4 +2155,63 @@ mark {
   background: rgba(139, 147, 167, 0.1);
   color: var(--text-muted);
   text-decoration: line-through;
+}
+
+.hoy-rutina.auto {
+  border-color: rgba(139, 147, 167, 0.35);
+  background: rgba(139, 147, 167, 0.06);
+}
+
+.hoy-rutina.omitida {
+  border-color: rgba(251, 113, 133, 0.55);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.hoy-rutina.omitida .hoy-rutina-nombre {
+  color: var(--neon-red);
+}
+
+.hoy-rutina-tag {
+  font-size: 0.72em;
+  padding: 0.05em 0.45em;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  color: var(--text-muted);
+}
+
+.hoy-rutina.omitida .hoy-rutina-tag {
+  color: var(--neon-red);
+}
+
+.comentar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.comentar textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.comentar textarea:focus {
+  outline: none;
+  border-color: var(--neon-cyan);
+}
+
+.comentar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
 }

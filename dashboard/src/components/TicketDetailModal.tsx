@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Adjunto, Comentario, Tecnico, Ticket } from "../supabaseClient";
 import { formatGt } from "../timezone";
-import { botDeepLink } from "../telegram";
+
+// Mismo tope que el bot (MAX_ADJUNTOS_POR_TICKET) y que agregar_adjunto().
+const MAX_FOTOS = 4;
 
 export type TicketAccion = "resolver" | "reabrir" | "anular";
 
@@ -17,6 +19,8 @@ interface TicketDetailModalProps {
   onAssign: (ticketId: number, tecnicoId: number | null) => void;
   onAction: (accion: TicketAccion, ticketId: number, texto: string) => Promise<boolean>;
   onEdit: () => void;
+  onComment: (ticketId: number, texto: string, seguimiento: boolean) => Promise<boolean>;
+  onPhoto: (ticketId: number, file: File) => Promise<boolean>;
   comentarios: Comentario[];
   adjuntos: Adjunto[];
   loadingComentarios: boolean;
@@ -29,6 +33,8 @@ export function TicketDetailModal({
   onAssign,
   onAction,
   onEdit,
+  onComment,
+  onPhoto,
   comentarios,
   adjuntos,
   loadingComentarios,
@@ -38,6 +44,29 @@ export function TicketDetailModal({
   const [texto, setTexto] = useState("");
   const [guardando, setGuardando] = useState(false);
   const pendiente = ticket.estado === "abierto" || ticket.estado === "en_progreso";
+  const [comentario, setComentario] = useState("");
+  const [seguimiento, setSeguimiento] = useState(false);
+  const [comentando, setComentando] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const puedeFoto = adjuntos.length < MAX_FOTOS;
+
+  async function comentar() {
+    if (!comentario.trim()) return;
+    setComentando(true);
+    const ok = await onComment(ticket.id, comentario.trim(), seguimiento);
+    setComentando(false);
+    if (ok) {
+      setComentario("");
+      setSeguimiento(false);
+    }
+  }
+
+  async function subirFoto(file: File) {
+    setSubiendo(true);
+    await onPhoto(ticket.id, file);
+    setSubiendo(false);
+  }
 
   function abrir(nueva: TicketAccion) {
     setAccion(nueva);
@@ -118,14 +147,25 @@ export function TicketDetailModal({
           <button className="action-button" onClick={onEdit}>
             ✏️ Editar
           </button>
-          {pendiente && (
-            <a className="action-button" href={botDeepLink("seguimiento", ticket.id)} target="_blank" rel="noreferrer">
-              🔧 Seguimiento (bot)
-            </a>
-          )}
-          <a className="action-button" href={botDeepLink("foto", ticket.id)} target="_blank" rel="noreferrer">
-            📎 Foto (bot)
-          </a>
+          <button
+            className="action-button"
+            onClick={() => fileInput.current?.click()}
+            disabled={!puedeFoto || subiendo}
+            title={puedeFoto ? "Adjuntar una foto" : `Máximo ${MAX_FOTOS} fotos por ticket`}
+          >
+            {subiendo ? "Subiendo..." : `📷 Foto (${adjuntos.length}/${MAX_FOTOS})`}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) subirFoto(file);
+              e.target.value = "";
+            }}
+          />
           {ticket.estado !== "anulado" && (
             <button className="action-button doc-danger" onClick={() => abrir("anular")}>
               🚫 Anular
@@ -179,6 +219,31 @@ export function TicketDetailModal({
         )}
 
         <h3>Historial</h3>
+        <div className="comentar">
+          <textarea
+            value={comentario}
+            onChange={(e) => setComentario(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) comentar();
+            }}
+            placeholder="Agregar un comentario… (Ctrl+Enter para guardar)"
+          />
+          <div className="comentar-actions">
+            {ticket.estado === "abierto" && (
+              <label className="equipo-activo">
+                <input type="checkbox" checked={seguimiento} onChange={(e) => setSeguimiento(e.target.checked)} />
+                Es seguimiento (pasa a “en progreso”)
+              </label>
+            )}
+            <button
+              className="action-button action-button-primary"
+              onClick={comentar}
+              disabled={comentando || !comentario.trim()}
+            >
+              {comentando ? "Guardando..." : "Agregar comentario"}
+            </button>
+          </div>
+        </div>
         {loadingComentarios ? (
           <p className="empty-state">Cargando historial...</p>
         ) : comentarios.length === 0 ? (

@@ -134,6 +134,10 @@ export interface RutinaRegistro {
   fecha: string;
   tecnico_id: number | null;
   completada_at: string;
+  // La marcó el dashboard al pasar la hora + 15 min sin que nadie lo hiciera.
+  automatica: boolean;
+  // Se revisó y NO se hizo: no cuenta como cumplida.
+  omitida: boolean;
 }
 
 // Ausencia de un técnico: todo el día (desde = null) o desde una hora.

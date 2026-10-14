@@ -5,7 +5,7 @@ import { formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from "../time
 import { EquipoModal } from "./EquipoModal";
 import { RutinasModal } from "./RutinasModal";
 import { RegistrarAtencionModal } from "./RegistrarAtencionModal";
-import { ausenteA, cubrirAusencia, diaInfo, rutinasDelDia } from "../rutinasUtils";
+import { MARGEN_AUTO_MIN, ausenteA, cubrirAusencia, diaInfo, rutinasDelDia, sumarMinutos } from "../rutinasUtils";
 
 interface HoyViewProps {
   tickets: Ticket[];
@@ -82,6 +82,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const [showEquipo, setShowEquipo] = useState(false);
   const [asignando, setAsignando] = useState<number | null>(null);
   const knownIds = useRef<Set<number> | null>(null);
+  const [registrosListos, setRegistrosListos] = useState<string | null>(null);
+  const autoIntentadas = useRef<Set<string>>(new Set());
 
   const hoy = gtDayKey(new Date(now).toISOString());
 
@@ -128,6 +130,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     async function loadRegistros() {
       const { data } = await supabase.from("rutina_registros").select("*").eq("fecha", hoy);
       setRegistros((data ?? []) as RutinaRegistro[]);
+      setRegistrosListos(hoy);
     }
     async function loadAusencias() {
       const { data } = await supabase.from("ausencias").select("*").eq("fecha", hoy);
@@ -211,14 +214,16 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       })),
     [rutinas, infoHoy, ausencias, tecnicos]
   );
-  const registroByRutina = new Map(registros.map((r) => [r.rutina_id, r]));
+  const registroByRutina = useMemo(() => new Map(registros.map((r) => [r.rutina_id, r])), [registros]);
   const rutinaById = new Map(rutinas.map((r) => [r.id, r]));
 
   // "Hecho hoy": tickets resueltos y rutinas completadas en una sola línea de
   // tiempo, para que el trabajo del día se vea aunque no hayan entrado tickets.
   const hechoHoy = [
     ...resueltosHoy.map((t) => ({ tipo: "ticket" as const, at: t.resolved_at!, ticket: t })),
-    ...registros.map((reg) => ({ tipo: "rutina" as const, at: reg.completada_at, registro: reg })),
+    ...registros
+      .filter((reg) => !reg.omitida)
+      .map((reg) => ({ tipo: "rutina" as const, at: reg.completada_at, registro: reg })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const tecnicoById = new Map(tecnicos.map((t) => [t.id, t]));
 
@@ -229,12 +234,22 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     if (error) alert(`No se pudo asignar el ticket: ${error.message}`);
   }
 
-  async function toggleRutina(rutina: Rutina, responsable: number | null) {
+  // Clic: pendiente → hecha → no se hizo → hecha… Una "no se hizo" vuelve a
+  // pendiente solo si todavía no pasó su hora + margen (si no, se remarcaría sola).
+  async function toggleRutina(rutina: Rutina, responsable: number | null, hora: string | null) {
     if (kiosk) return;
     const registro = registroByRutina.get(rutina.id);
-    const { error } = registro
-      ? await supabase.from("rutina_registros").delete().eq("id", registro.id)
-      : await supabase.from("rutina_registros").insert({ rutina_id: rutina.id, fecha: hoy, tecnico_id: responsable });
+    const vencida = !!hora && sumarMinutos(hora, MARGEN_AUTO_MIN) <= hhmm;
+    const { error } = !registro
+      ? await supabase.from("rutina_registros").insert({ rutina_id: rutina.id, fecha: hoy, tecnico_id: responsable })
+      : !registro.omitida
+        ? await supabase.from("rutina_registros").update({ omitida: true }).eq("id", registro.id)
+        : vencida
+          ? await supabase
+              .from("rutina_registros")
+              .update({ omitida: false, automatica: false, completada_at: new Date().toISOString() })
+              .eq("id", registro.id)
+          : await supabase.from("rutina_registros").delete().eq("id", registro.id);
     if (error) alert(`No se pudo actualizar la rutina: ${error.message}`);
   }
 
@@ -265,6 +280,38 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   // HH:MM de 24 h, para comparar con la hora de cada rutina y marcar las atrasadas.
   const hhmm = new Date(now).toLocaleTimeString("en-GB", { timeZone: GT_TIMEZONE, hour: "2-digit", minute: "2-digit" });
   const nota = infoHoy.excepcion?.nota;
+
+  // Rutinas que pasaron su hora + margen sin marcarse: se dan por hechas por su
+  // responsable del día (con rotación y ausencias aplicadas), como "auto". Lo
+  // hace cualquier dashboard abierto (normalmente la pantalla de TI); la
+  // restricción única (rutina_id, fecha) evita duplicados entre pantallas.
+  useEffect(() => {
+    if (registrosListos !== hoy) return;
+    const pendientes = rutinasHoy.filter(
+      ({ rutina, hora }) =>
+        hora &&
+        !registroByRutina.has(rutina.id) &&
+        sumarMinutos(hora, MARGEN_AUTO_MIN) <= hhmm &&
+        !autoIntentadas.current.has(`${hoy}-${rutina.id}`)
+    );
+    if (!pendientes.length) return;
+    pendientes.forEach(({ rutina }) => autoIntentadas.current.add(`${hoy}-${rutina.id}`));
+    supabase
+      .from("rutina_registros")
+      .upsert(
+        pendientes.map(({ rutina, hora, responsable }) => ({
+          rutina_id: rutina.id,
+          fecha: hoy,
+          tecnico_id: responsable,
+          automatica: true,
+          completada_at: new Date(`${hoy}T${hora}:00-06:00`).toISOString(),
+        })),
+        { onConflict: "rutina_id,fecha", ignoreDuplicates: true }
+      )
+      .then(({ error }) => {
+        if (error) console.error("No se pudieron marcar rutinas automáticas:", error.message);
+      });
+  }, [registrosListos, hoy, hhmm, rutinasHoy, registroByRutina]);
   const jornadaTexto = infoHoy.laboral
     ? [infoHoy.salida && `Salida ${infoHoy.salida}`, nota].filter(Boolean).join(" · ")
     : `Descanso${nota && nota !== "Descanso" ? ` · ${nota}` : ""}`;
@@ -432,7 +479,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
                       {rutinaById.get(item.registro.rutina_id)?.nombre ?? "Rutina"}
                     </span>
                     <span className="hoy-done-meta">
-                      Rutina ·{" "}
+                      {item.registro.automatica ? "Rutina (auto)" : "Rutina"} ·{" "}
                       {item.registro.tecnico_id ? tecnicoById.get(item.registro.tecnico_id)?.nombre ?? "—" : "—"} ·{" "}
                       {formatGtTime(item.at)}
                     </span>
@@ -449,7 +496,11 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           Rutinas de hoy
           {rutinasHoy.length > 0 && (
             <span className="hoy-rutinas-count">
-              {rutinasHoy.filter(({ rutina }) => registroByRutina.has(rutina.id)).length}/{rutinasHoy.length}
+              {rutinasHoy.filter(({ rutina }) => {
+                const reg = registroByRutina.get(rutina.id);
+                return reg && !reg.omitida;
+              }).length}
+              /{rutinasHoy.length}
             </span>
           )}
         </h3>
@@ -467,15 +518,18 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
               const registro = registroByRutina.get(r.id);
               const tecnico = responsable ? tecnicoById.get(responsable) : undefined;
               const atrasada = !registro && !!horaRutina && horaRutina < hhmm;
+              const estado = !registro ? "" : registro.omitida ? " omitida" : registro.automatica ? " done auto" : " done";
               return (
                 <button
                   key={r.id}
-                  className={`hoy-rutina${registro ? " done" : ""}${atrasada ? " atrasada" : ""}`}
-                  onClick={() => toggleRutina(r, responsable)}
+                  className={`hoy-rutina${estado}${atrasada ? " atrasada" : ""}`}
+                  onClick={() => toggleRutina(r, responsable, horaRutina)}
                   disabled={kiosk}
                   title={r.descripcion ?? undefined}
                 >
-                  <span className="hoy-rutina-check">{registro ? "✅" : "⬜"}</span>
+                  <span className="hoy-rutina-check">
+                    {!registro ? "⬜" : registro.omitida ? "❌" : registro.automatica ? "☑️" : "✅"}
+                  </span>
                   {horaRutina && <span className="hoy-rutina-hora">{horaRutina}</span>}
                   <span className="hoy-rutina-nombre">{r.nombre}</span>
                   {tecnico && (
@@ -487,7 +541,11 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
                   {cubreA && (
                     <span className="hoy-rutina-cubre">cubre a {tecnicoById.get(cubreA)?.nombre ?? "—"}</span>
                   )}
-                  {registro && <span className="hoy-rutina-hora">{formatGtTime(registro.completada_at)}</span>}
+                  {registro?.omitida && <span className="hoy-rutina-tag">no se hizo</span>}
+                  {registro && !registro.omitida && registro.automatica && <span className="hoy-rutina-tag">auto</span>}
+                  {registro && !registro.omitida && !registro.automatica && (
+                    <span className="hoy-rutina-hora">{formatGtTime(registro.completada_at)}</span>
+                  )}
                 </button>
               );
             })}

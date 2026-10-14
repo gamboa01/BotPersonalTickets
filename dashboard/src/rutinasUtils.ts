@@ -36,7 +36,10 @@ export function responsableDelDia(rutina: Rutina, fecha: string) {
   return turno[((dias % turno.length) + turno.length) % turno.length];
 }
 
-function sumarMinutos(hora: string, minutos: number) {
+// Minutos de gracia después de la hora de una rutina antes de darla por hecha.
+export const MARGEN_AUTO_MIN = 15;
+
+export function sumarMinutos(hora: string, minutos: number) {
   const [h, m] = hora.split(":").map(Number);
   const total = (((h * 60 + m + minutos) % 1440) + 1440) % 1440;
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;

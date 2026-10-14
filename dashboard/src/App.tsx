@@ -7,13 +7,12 @@ import { TrendChart } from "./components/TrendChart";
 import { TicketsTable } from "./components/TicketsTable";
 import { TicketAccion, TicketDetailModal } from "./components/TicketDetailModal";
 import { RegistrarAtencionModal } from "./components/RegistrarAtencionModal";
+import { resizeImageFile } from "./imageUtils";
 import { Login } from "./components/Login";
-import { RegistrarTicket } from "./components/RegistrarTicket";
 import { DocsView } from "./components/DocsView";
 import { PlantaView } from "./components/PlantaView";
 import { HoyView } from "./components/HoyView";
 import { gtDayKey } from "./timezone";
-import { botDeepLink } from "./telegram";
 
 const TREND_DAYS = 14;
 
@@ -49,6 +48,7 @@ export default function App() {
   const [loadingComentarios, setLoadingComentarios] = useState(false);
   const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
   const [editando, setEditando] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -238,6 +238,61 @@ export default function App() {
     return true;
   }
 
+  async function recargarDetalle(ticketId: number) {
+    const [{ data: c }, { data: a }] = await Promise.all([
+      supabase.from("comentarios").select("*").eq("ticket_id", ticketId).order("created_at"),
+      supabase.from("adjuntos").select("*").eq("ticket_id", ticketId).order("created_at"),
+    ]);
+    setComentarios((c ?? []) as Comentario[]);
+    setAdjuntos((a ?? []) as Adjunto[]);
+  }
+
+  // Autor de los comentarios: quien atendió la última vez en "Registrar atención"
+  // (se recuerda en este navegador); si no hay, "Dashboard".
+  function autorActual() {
+    try {
+      const id = Number(localStorage.getItem("atencion-tecnico"));
+      return tecnicos.find((t) => t.id === id)?.nombre ?? "Dashboard";
+    } catch {
+      return "Dashboard";
+    }
+  }
+
+  async function comentarTicket(ticketId: number, texto: string, seguimiento: boolean) {
+    const { error } = await supabase.rpc("comentar_ticket", {
+      p_ticket_id: ticketId,
+      p_texto: texto,
+      p_seguimiento: seguimiento,
+      p_autor: autorActual(),
+    });
+    if (error) {
+      alert(`No se pudo guardar el comentario: ${error.message}`);
+      return false;
+    }
+    await recargarDetalle(ticketId);
+    return true;
+  }
+
+  // Misma compresión y misma carpeta (bucket "adjuntos", <ticket>/<uuid>.jpg) que usa el bot.
+  async function adjuntarFoto(ticketId: number, file: File) {
+    try {
+      const jpeg = await resizeImageFile(file);
+      const path = `${ticketId}/${crypto.randomUUID()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("adjuntos")
+        .upload(path, jpeg, { contentType: "image/jpeg" });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from("adjuntos").getPublicUrl(path);
+      const { error } = await supabase.rpc("agregar_adjunto", { p_ticket_id: ticketId, p_url: data.publicUrl });
+      if (error) throw error;
+      await recargarDetalle(ticketId);
+      return true;
+    } catch (err) {
+      alert(`No se pudo adjuntar la foto: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+  }
+
   if (KIOSK) {
     return (
       <div className="kiosk-root">
@@ -270,15 +325,9 @@ export default function App() {
         <div className="header-actions">
           {view === "tickets" && (
             <>
-              <a
-                className="action-button action-button-primary"
-                href={botDeepLink("nuevo")}
-                target="_blank"
-                rel="noreferrer"
-              >
-                + Nuevo ticket
-              </a>
-              <RegistrarTicket />
+              <button className="action-button action-button-primary" onClick={() => setRegistrando(true)}>
+                + Registrar atención
+              </button>
             </>
           )}
           <button className="logout-button" onClick={() => supabase.auth.signOut()}>
@@ -352,12 +401,16 @@ export default function App() {
           onAssign={asignarTicket}
           onAction={accionTicket}
           onEdit={() => setEditando(true)}
+          onComment={comentarTicket}
+          onPhoto={adjuntarFoto}
           comentarios={comentarios}
           adjuntos={adjuntos}
           loadingComentarios={loadingComentarios}
           onClose={() => setSelectedTicket(null)}
         />
       )}
+
+      {registrando && <RegistrarAtencionModal tecnicos={tecnicos} onClose={() => setRegistrando(false)} />}
 
       {ticketAbierto && editando && (
         <RegistrarAtencionModal
