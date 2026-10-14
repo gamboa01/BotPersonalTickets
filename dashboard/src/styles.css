@@ -2215,3 +2215,103 @@ mark {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+.link-button {
+  display: inline-block;
+  margin: -4px 0 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--neon-cyan);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.hoy-aviso {
+  margin: 0 0 0.8em;
+  padding: 0.6em 1em;
+  border-radius: 0.7em;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--neon-amber);
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.hoy-aviso.todos {
+  border-color: rgba(251, 113, 133, 0.55);
+  background: rgba(251, 113, 133, 0.12);
+  color: var(--neon-red);
+  font-size: 1.5em;
+  text-align: center;
+}
+
+.hoy-kiosk .hoy-aviso {
+  font-size: 1.6em;
+  text-align: center;
+}
+
+.hoy-kiosk .hoy-aviso.todos {
+  font-size: 2.4em;
+  padding: 0.8em 1em;
+}
+
+.hoy-equipo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin: 0 0 0.9em;
+}
+
+.hoy-equipo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.3em 0.5em 0.3em 0.8em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 0.88em;
+  color: var(--text-muted);
+}
+
+.hoy-equipo-chip i {
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+}
+
+.hoy-equipo-chip b {
+  color: var(--text);
+}
+
+.hoy-equipo-chip.disponible {
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.hoy-equipo-chip.almuerzo {
+  border-color: rgba(251, 191, 36, 0.45);
+  color: var(--neon-amber);
+}
+
+.hoy-equipo-chip.ausente {
+  opacity: 0.6;
+}
+
+.hoy-equipo-chip button {
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.hoy-equipo-chip button:hover {
+  border-color: var(--neon-cyan);
+}

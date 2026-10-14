@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Area, Ausencia, ExcepcionDia, JornadaDia, Rutina, RutinaRegistro, supabase, Tecnico, Ticket } from "../supabaseClient";
+import { Almuerzo, Area, Ausencia, ExcepcionDia, JornadaDia, Rutina, RutinaRegistro, supabase, Tecnico, Ticket } from "../supabaseClient";
 import { NIVEL_LABEL, ladoArea } from "../planUtils";
 import { formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from "../timezone";
 import { EquipoModal } from "./EquipoModal";
@@ -25,6 +25,12 @@ const PRIORIDAD_LABEL: Record<Ticket["prioridad"], string> = {
 const SIN_ASIGNAR_COLOR = "#fb7185";
 const NUEVO_MS = 90_000;
 const SOUND_KEY = "hoy-sonido";
+const ALMUERZO_MIN = 60;
+
+// "Guillermo", "Guillermo y Luis", "Ana, Guillermo y Luis".
+function unirNombres(nombres: string[]) {
+  return nombres.length <= 1 ? nombres.join("") : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
 
 // "lun 12": para los pendientes que vienen de días anteriores.
 function diaCorto(iso: string) {
@@ -77,6 +83,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const [showRutinas, setShowRutinas] = useState(false);
   const [showRegistrar, setShowRegistrar] = useState(false);
   const [ausencias, setAusencias] = useState<Ausencia[]>([]);
+  const [almuerzos, setAlmuerzos] = useState<Almuerzo[]>([]);
   const [recientes, setRecientes] = useState<Map<number, number>>(new Map());
   const [sonido, setSonido] = useState(readSoundPref);
   const [showEquipo, setShowEquipo] = useState(false);
@@ -136,12 +143,18 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       const { data } = await supabase.from("ausencias").select("*").eq("fecha", hoy);
       setAusencias((data ?? []) as Ausencia[]);
     }
+    async function loadAlmuerzos() {
+      const { data } = await supabase.from("almuerzos").select("*").eq("fecha", hoy);
+      setAlmuerzos((data ?? []) as Almuerzo[]);
+    }
     loadRegistros();
     loadAusencias();
+    loadAlmuerzos();
     const channel = supabase
       .channel(`registros-${hoy}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "rutina_registros" }, loadRegistros)
       .on("postgres_changes", { event: "*", schema: "public", table: "ausencias" }, loadAusencias)
+      .on("postgres_changes", { event: "*", schema: "public", table: "almuerzos" }, loadAlmuerzos)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -280,6 +293,53 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   // HH:MM de 24 h, para comparar con la hora de cada rutina y marcar las atrasadas.
   const hhmm = new Date(now).toLocaleTimeString("en-GB", { timeZone: GT_TIMEZONE, hour: "2-digit", minute: "2-digit" });
   const nota = infoHoy.excepcion?.nota;
+
+  // Quién está ahora: ausente, en almuerzo (hasta su `fin`, salvo que marque
+  // el regreso antes) o disponible. Lo usa el aviso grande de la pantalla.
+  const almuerzoByTecnico = new Map(almuerzos.map((a) => [a.tecnico_id, a]));
+  const equipoAhora = tecnicos
+    .filter((t) => t.activo)
+    .map((t) => {
+      const almuerzo = almuerzoByTecnico.get(t.id);
+      const estado: "ausente" | "almuerzo" | "disponible" = ausenteA(ausenciaByTecnico.get(t.id), hhmm)
+        ? "ausente"
+        : almuerzo && !almuerzo.regreso && now < new Date(almuerzo.fin).getTime()
+          ? "almuerzo"
+          : "disponible";
+      return { tecnico: t, estado, almuerzo };
+    });
+  const enAlmuerzo = equipoAhora.filter((e) => e.estado === "almuerzo");
+  const disponibles = equipoAhora.filter((e) => e.estado === "disponible");
+  const avisoEquipo = !enAlmuerzo.length
+    ? null
+    : disponibles.length
+      ? `🍽️ ${unirNombres(enAlmuerzo.map((e) => `${e.tecnico.nombre} (regresa ${formatGtTime(e.almuerzo!.fin)})`))} en almuerzo · ${unirNombres(disponibles.map((e) => e.tecnico.nombre))} ${disponibles.length > 1 ? "pueden" : "puede"} atenderte`
+      : `🍽️ Estamos en almuerzo · Regresamos a las ${formatGtTime(
+          enAlmuerzo.map((e) => e.almuerzo!.fin).sort()[0]
+        )}`;
+
+  async function salirAlmuerzo(tecnicoId: number) {
+    const inicio = new Date();
+    const { error } = await supabase.from("almuerzos").upsert(
+      {
+        tecnico_id: tecnicoId,
+        fecha: hoy,
+        inicio: inicio.toISOString(),
+        fin: new Date(inicio.getTime() + ALMUERZO_MIN * 60_000).toISOString(),
+        regreso: null,
+      },
+      { onConflict: "tecnico_id,fecha" }
+    );
+    if (error) alert(`No se pudo marcar el almuerzo: ${error.message}`);
+  }
+
+  async function regresoAlmuerzo(almuerzo: Almuerzo) {
+    const { error } = await supabase
+      .from("almuerzos")
+      .update({ regreso: new Date().toISOString() })
+      .eq("id", almuerzo.id);
+    if (error) alert(`No se pudo marcar el regreso: ${error.message}`);
+  }
 
   // Rutinas que pasaron su hora + margen sin marcarse: se dan por hechas por su
   // responsable del día (con rotación y ausencias aplicadas), como "auto". Lo
@@ -425,6 +485,26 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           )}
         </div>
       </header>
+
+      {avisoEquipo && <div className={`hoy-aviso${disponibles.length ? "" : " todos"}`}>{avisoEquipo}</div>}
+
+      {equipoAhora.length > 0 && (
+        <div className="hoy-equipo">
+          {equipoAhora.map(({ tecnico, estado, almuerzo }) => (
+            <span key={tecnico.id} className={`hoy-equipo-chip ${estado}`}>
+              <i style={{ background: tecnico.color || "#22d3ee" }} />
+              <b>{tecnico.nombre}</b>
+              {estado === "disponible" && "Disponible"}
+              {estado === "ausente" && "Ausente"}
+              {estado === "almuerzo" && `En almuerzo hasta ${formatGtTime(almuerzo!.fin)}`}
+              {!kiosk && estado === "disponible" && (
+                <button onClick={() => salirAlmuerzo(tecnico.id)}>🍽️ Almuerzo</button>
+              )}
+              {!kiosk && estado === "almuerzo" && <button onClick={() => regresoAlmuerzo(almuerzo!)}>Regresó</button>}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="hoy-board" style={{ gridTemplateColumns: `repeat(${columnas.length + 1}, minmax(240px, 1fr))` }}>
         {columnas.map((col) => (

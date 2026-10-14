@@ -457,7 +457,12 @@ function helpText(esAdmin: boolean) {
 /seguimiento &lt;id&gt; - agregar un comentario de seguimiento (pasa a en progreso)
 /resolver &lt;id&gt; - marcar un ticket como resuelto
 /ip &lt;dirección&gt; - ver en qué rango y política del firewall está una IP
-/actualizarmenu - actualizar el menú de comandos de Telegram`;
+/actualizarmenu - actualizar el menú de comandos de Telegram
+
+<b>Registro rápido</b>: manda un mensaje de 3 líneas
+Departamento
+Nombre de quien lo pide
+Solicitud`;
   }
 
   return help;
@@ -821,10 +826,83 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
   }
 }
 
+// Registro rápido (solo admin, sin operación en curso): un mensaje de 3+ líneas
+//   Departamento
+//   Nombre de quien lo pide
+//   Solicitud (puede seguir en varias líneas)
+// crea el ticket al instante y ofrece marcarlo resuelto o anularlo.
+async function registroRapido(chatId: number, telegramId: number, lineas: string[]) {
+  const [depto, nombre, ...resto] = lineas;
+  const solicitud = resto.join("\n");
+
+  const { data: areas } = await supabase.from("areas").select("id, nombre").neq("tipo", "referencia");
+  const buscado = normalizar(depto);
+  const exacta = (areas ?? []).find((a) => normalizar(a.nombre) === buscado);
+  const parciales = (areas ?? []).filter(
+    (a) => normalizar(a.nombre).includes(buscado) || buscado.includes(normalizar(a.nombre))
+  );
+  const area = exacta ?? (parciales.length === 1 ? parciales[0] : null);
+
+  const { data: ticket, error } = await supabase
+    .from("tickets")
+    .insert({
+      descripcion: solicitud,
+      area_id: area?.id ?? null,
+      prioridad: "media",
+      reportado_por: telegramId,
+      reportado_por_nombre: nombre,
+    })
+    .select("id")
+    .single();
+  if (error || !ticket) {
+    await sendMessage(chatId, "Ocurrió un error registrando el ticket. Intenta de nuevo.");
+    return;
+  }
+
+  // Si el departamento no coincide con el croquis, que no se pierda lo que se escribió.
+  if (!area) {
+    await supabase
+      .from("comentarios")
+      .insert({ ticket_id: ticket.id, autor: "Bot", texto: `Departamento indicado: ${depto}` });
+  }
+
+  let msg =
+    `✅ <b>Ticket #${ticket.id} registrado</b>\n` +
+    `📍 ${escapeHtml(area?.nombre ?? depto)}\n` +
+    `👤 ${escapeHtml(nombre)}\n` +
+    `📝 ${escapeHtml(solicitud)}`;
+  if (!area) {
+    msg += `\n\n⚠️ No encontré el área "${escapeHtml(depto)}" en el croquis; quedó sin área (corrígelo en el dashboard con ✏️ Editar).`;
+  }
+  await sendMessage(chatId, msg, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "✅ Ya quedó resuelto", callback_data: `rapres:${ticket.id}` },
+          { text: "🚫 Anular", callback_data: `rapanul:${ticket.id}` },
+        ],
+      ],
+    },
+  });
+}
+
 async function handleFreeText(chatId: number, telegramId: number, text: string) {
   const session = await getSession(telegramId);
   if (!session) {
-    await sendMessage(chatId, "Usa /nuevo para crear un ticket o /ayuda para ver comandos.");
+    const lineas = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (isAdmin(telegramId) && lineas.length >= 3) {
+      await registroRapido(chatId, telegramId, lineas);
+      return;
+    }
+    await sendMessage(
+      chatId,
+      isAdmin(telegramId)
+        ? "Para un registro rápido manda 3 líneas: departamento, nombre y solicitud. O usa /nuevo o /ayuda."
+        : "Usa /nuevo para crear un ticket o /ayuda para ver comandos."
+    );
     return;
   }
 
@@ -900,6 +978,35 @@ async function handleCallback(callback: any) {
 
   if (data === "foto:si") {
     await sendMessage(chatId, "Envía la foto ahora.");
+    return;
+  }
+
+  // Botones del registro rápido.
+  if (data.startsWith("rapres:") || data.startsWith("rapanul:")) {
+    const [accion, idTexto] = data.split(":");
+    const ticketId = Number(idTexto);
+    const resolver = accion === "rapres";
+    const { data: actualizado } = await supabase
+      .from("tickets")
+      .update(resolver ? { estado: "resuelto", resolved_at: new Date().toISOString() } : { estado: "anulado" })
+      .eq("id", ticketId)
+      .in("estado", ["abierto", "en_progreso"])
+      .select("id");
+    if (!actualizado?.length) {
+      await sendMessage(chatId, `El ticket #${ticketId} ya no está pendiente.`);
+      return;
+    }
+    await supabase.from("comentarios").insert({
+      ticket_id: ticketId,
+      autor: callback.from.first_name ?? "Bot",
+      texto: resolver ? "Resuelto: Atendido" : "Anulado: Registro rápido anulado",
+    });
+    await tg("editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: callback.message.message_id,
+      reply_markup: { inline_keyboard: [] },
+    });
+    await sendMessage(chatId, resolver ? `✅ Ticket #${ticketId} resuelto.` : `🚫 Ticket #${ticketId} anulado.`);
     return;
   }
 

@@ -150,3 +150,13 @@ export interface Ausencia {
   nota: string | null;
   created_at: string;
 }
+
+// Almuerzo de un técnico en el día: `fin` es la hora prevista de regreso.
+export interface Almuerzo {
+  id: number;
+  tecnico_id: number;
+  fecha: string;
+  inicio: string;
+  fin: string;
+  regreso: string | null;
+}

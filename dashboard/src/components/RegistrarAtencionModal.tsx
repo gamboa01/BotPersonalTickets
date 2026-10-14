@@ -61,6 +61,9 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
   const [resueltoAt, setResueltoAt] = useState(() => ahoraGt(ticket?.resolved_at ?? undefined));
   const [resolucion, setResolucion] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Lo normal es registrar en el momento: las horas solo se muestran si se
+  // registra tarde (o al editar, donde siempre se pueden corregir).
+  const [cambiarHora, setCambiarHora] = useState(!!ticket);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -81,7 +84,9 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
 
   async function guardar() {
     if (!descripcion.trim()) return setError("Escribe qué pasó o qué se hizo.");
-    if (resuelto && resueltoAt < creado) return setError("La hora de cierre no puede ser antes de la de inicio.");
+    if (cambiarHora && resuelto && resueltoAt < creado)
+      return setError("La hora de cierre no puede ser antes de la de inicio.");
+    const ahora = new Date().toISOString();
     setSaving(true);
     if (ticket) {
       const { error } = await supabase.rpc("editar_ticket", {
@@ -112,9 +117,9 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
       p_prioridad: prioridad,
       p_reportado_por_nombre: pidio.trim() || null,
       p_tecnico_id: tecnicoId,
-      p_creado: gtLocalToIso(creado),
+      p_creado: cambiarHora ? gtLocalToIso(creado) : ahora,
       p_resuelto: resuelto,
-      p_resuelto_at: resuelto ? gtLocalToIso(resueltoAt) : null,
+      p_resuelto_at: resuelto ? (cambiarHora ? gtLocalToIso(resueltoAt) : ahora) : null,
       p_resolucion: resuelto ? resolucion.trim() || null : null,
     });
     setSaving(false);
@@ -225,11 +230,19 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
               ))}
             </div>
           </div>
-          <div className="doc-field">
-            <label htmlFor="atCreado">Cuándo lo pidieron</label>
-            <input id="atCreado" type="datetime-local" value={creado} onChange={(e) => setCreado(e.target.value)} />
-          </div>
+          {cambiarHora && (
+            <div className="doc-field">
+              <label htmlFor="atCreado">Cuándo lo pidieron</label>
+              <input id="atCreado" type="datetime-local" value={creado} onChange={(e) => setCreado(e.target.value)} />
+            </div>
+          )}
         </div>
+
+        {!cambiarHora && (
+          <button type="button" className="link-button" onClick={() => setCambiarHora(true)}>
+            🕒 ¿Lo registras tarde? Cambiar hora
+          </button>
+        )}
 
         {ticket ? (
           ticket.resolved_at && (
@@ -257,10 +270,17 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
                 placeholder="Ej: Limpieza de cabezales"
               />
             </div>
-            <div className="doc-field">
-              <label htmlFor="atResAt">Cuándo se resolvió</label>
-              <input id="atResAt" type="datetime-local" value={resueltoAt} onChange={(e) => setResueltoAt(e.target.value)} />
-            </div>
+            {cambiarHora && (
+              <div className="doc-field">
+                <label htmlFor="atResAt">Cuándo se resolvió</label>
+                <input
+                  id="atResAt"
+                  type="datetime-local"
+                  value={resueltoAt}
+                  onChange={(e) => setResueltoAt(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         ) : (
           <p className="doc-hint">Quedará pendiente en Hoy, en la columna de quien atiende, hasta que se resuelva.</p>
