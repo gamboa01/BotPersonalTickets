@@ -166,3 +166,15 @@ export interface Almuerzo {
   // "Sigo trabajando": se canceló el automático y el almuerzo sigue pendiente.
   pospuesto: boolean;
 }
+
+// Préstamo de equipo: activo mientras `devuelto_at` sea null.
+export interface Prestamo {
+  id: number;
+  equipo: string;
+  prestado_a: string;
+  area_id: number | null;
+  tecnico_id: number | null;
+  nota: string | null;
+  prestado_at: string;
+  devuelto_at: string | null;
+}

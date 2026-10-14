@@ -62,6 +62,7 @@ Puntos a tener en cuenta si se modifica:
 - Rate limiting (`rate_limits` table) y validación del secret del webhook (`X-Telegram-Bot-Api-Secret-Token`) ocurren en `Deno.serve()` antes de despachar a cualquier handler.
 - El menú de comandos de Telegram vive en `USER_COMMANDS`/`ADMIN_COMMANDS` y se publica con `/actualizarmenu` (`setMyCommands`), no en BotFather. Al agregar un comando, actualizar esas listas y `helpText()`.
 - Registro rápido (`registroRapido()`): un admin sin operación en curso que manda un mensaje de 3+ líneas (departamento / nombre / solicitud) crea el ticket al instante; el área se busca con `buscarAreas()` (`claveArea()` quita mayúsculas, tildes, signos y palabras de relleno como "depto"/"de"; luego exacta → siglas, con "RRHH" → "rh" → parciales por palabra: cada palabra escrita debe ser el inicio de una palabra del nombre, así "it" no encuentra "Auditoría"). Si hay varias, se ofrecen botones `rapar:<ticket>:<area>`; si no hay ninguna, queda sin área con un comentario "Departamento indicado: …". Botones `rapres:<id>` / `rapanul:<id>` para resolver o anular.
+- Préstamos (`prestamos`, 0026): mensaje cuya primera línea es "Préstamo" (equipo / a quién / área opcional) → `registroPrestamo()`; `/prestamos` lista los activos con botones `prestdev:<id>`. En el dashboard es `PrestamosPanel.tsx`, solo en la PC (nunca en `#pantalla`, porque muestra nombres) y sin fecha de devolución.
 - Este archivo no toca el módulo de Documentación en absoluto — esa función es 100% dashboard + Supabase directo.
 
 ### Dashboard y bot ya no se enlazan

@@ -5,6 +5,7 @@ import { aLaHora, formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from
 import { EquipoModal } from "./EquipoModal";
 import { RutinasModal } from "./RutinasModal";
 import { CategoriasModal } from "./CategoriasModal";
+import { PrestamosPanel } from "./PrestamosPanel";
 import { RegistrarAtencionModal } from "./RegistrarAtencionModal";
 import { MARGEN_AUTO_MIN, ausenteA, cubrirAusencia, diaInfo, rutinasDelDia, sumarMinutos } from "../rutinasUtils";
 import { Tags, Bell, BellOff, Briefcase, Check, CircleCheck, CircleX, MapPin, Maximize, Plus, Repeat, Settings, Square, Tv, Users, UtensilsCrossed } from "lucide-react";
@@ -761,6 +762,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         </section>
       </div>
 
+      {/* Préstamos: solo en la PC, nunca en la pantalla de TI (muestra nombres). */}
+      {!kiosk && <PrestamosPanel areas={areas} tecnicos={tecnicos} now={now} />}
 
       {showEquipo && <EquipoModal tecnicos={tecnicos} hoy={hoy} onClose={() => setShowEquipo(false)} />}
       {showCategorias && <CategoriasModal onClose={() => setShowCategorias(false)} />}

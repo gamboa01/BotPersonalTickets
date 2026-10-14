@@ -467,6 +467,7 @@ const ADMIN_COMMANDS = [
   { command: "registrar", description: "Ticket a nombre de otra persona: /registrar <nombre>" },
   { command: "seguimiento", description: "Seguimiento de un ticket: /seguimiento <id>" },
   { command: "resolver", description: "Resolver un ticket: /resolver <id>" },
+  { command: "prestamos", description: "Ver el equipo prestado y marcar devoluciones" },
   { command: "actualizarmenu", description: "Actualizar este menú de comandos" },
 ];
 
@@ -502,10 +503,18 @@ function helpText(esAdmin: boolean) {
 /ip &lt;dirección&gt; - ver en qué rango y política del firewall está una IP
 /actualizarmenu - actualizar el menú de comandos de Telegram
 
-<b>Registro rápido</b>: manda un mensaje de 3 líneas
+/prestamos - ver el equipo prestado y marcar devoluciones
+
+<b>Registro rápido de ticket</b>: manda un mensaje (sin /) de 3 líneas
 Departamento
 Nombre de quien lo pide
-Solicitud`;
+Solicitud
+
+<b>Registro rápido de préstamo</b>: un mensaje que empiece con "Préstamo"
+Préstamo
+Equipo
+A quién
+Área (opcional)`;
   }
 
   return help;
@@ -539,6 +548,36 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         break;
       }
       await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
+      break;
+    }
+
+    case "/prestamos": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para ver los préstamos.");
+        break;
+      }
+      const { data: prestamos } = await supabase
+        .from("prestamos")
+        .select("id, equipo, prestado_a, prestado_at, areas(nombre)")
+        .is("devuelto_at", null)
+        .order("prestado_at", { ascending: false });
+      if (!prestamos?.length) {
+        await sendMessage(chatId, "No hay equipo prestado.");
+        break;
+      }
+      const lineas = prestamos.map(
+        // deno-lint-ignore no-explicit-any
+        (p: any) =>
+          `• <b>${escapeHtml(p.equipo)}</b> → ${escapeHtml(p.prestado_a)}${p.areas?.nombre ? ` (${escapeHtml(p.areas.nombre)})` : ""} · ${formatGt(p.prestado_at)}`
+      );
+      await sendMessage(chatId, `<b>Préstamos activos</b>\n${lineas.join("\n")}`, {
+        reply_markup: {
+          // deno-lint-ignore no-explicit-any
+          inline_keyboard: prestamos.map((p: any) => [
+            { text: `Devuelto: ${p.equipo} (${p.prestado_a})`.slice(0, 60), callback_data: `prestdev:${p.id}` },
+          ]),
+        },
+      });
       break;
     }
 
@@ -930,6 +969,38 @@ async function registroRapido(chatId: number, telegramId: number, lineas: string
   });
 }
 
+// Préstamo rápido (solo admin): mensaje cuya primera línea es "Préstamo"
+//   Préstamo
+//   Equipo
+//   A quién
+//   Área (opcional)
+async function registroPrestamo(chatId: number, lineas: string[]) {
+  const [equipo, prestadoA, depto] = lineas;
+  let area: { id: number; nombre: string } | null = null;
+  let aviso = "";
+  if (depto) {
+    const { data: areas } = await supabase.from("areas").select("id, nombre").neq("tipo", "referencia");
+    const candidatas = buscarAreas(depto, areas ?? []);
+    if (candidatas.length === 1) area = candidatas[0];
+    else aviso = `\n\nNo encontré un área única para "${escapeHtml(depto)}"; quedó sin área.`;
+  }
+
+  const { data: prestamo, error } = await supabase
+    .from("prestamos")
+    .insert({ equipo, prestado_a: prestadoA, area_id: area?.id ?? null, nota: area || !depto ? null : depto })
+    .select("id")
+    .single();
+  if (error || !prestamo) {
+    await sendMessage(chatId, "Ocurrió un error registrando el préstamo. Intenta de nuevo.");
+    return;
+  }
+  await sendMessage(
+    chatId,
+    `<b>Préstamo registrado</b>\n${escapeHtml(equipo)} → ${escapeHtml(prestadoA)}${area ? ` (${escapeHtml(area.nombre)})` : ""}${aviso}`,
+    { reply_markup: { inline_keyboard: [[{ text: "Devuelto", callback_data: `prestdev:${prestamo.id}` }]] } }
+  );
+}
+
 async function handleFreeText(chatId: number, telegramId: number, text: string) {
   const session = await getSession(telegramId);
   if (!session) {
@@ -937,6 +1008,10 @@ async function handleFreeText(chatId: number, telegramId: number, text: string) 
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean);
+    if (isAdmin(telegramId) && lineas.length >= 3 && ["prestamo", "prestamos"].includes(claveArea(lineas[0]))) {
+      await registroPrestamo(chatId, lineas.slice(1));
+      return;
+    }
     if (isAdmin(telegramId) && lineas.length >= 3) {
       await registroRapido(chatId, telegramId, lineas);
       return;
@@ -1036,6 +1111,24 @@ async function handleCallback(callback: any) {
       .from("comentarios")
       .insert({ ticket_id: ticketId, autor: callback.from.first_name ?? "Bot", texto: `Área elegida: ${area.nombre}` });
     await sendMessage(chatId, `📍 Ticket #${ticketId}: área ${escapeHtml(area.nombre)}.`);
+    return;
+  }
+
+  if (data.startsWith("prestdev:")) {
+    const id = Number(data.split(":")[1]);
+    const { data: devuelto } = await supabase
+      .from("prestamos")
+      .update({ devuelto_at: new Date().toISOString() })
+      .eq("id", id)
+      .is("devuelto_at", null)
+      .select("equipo, prestado_a")
+      .maybeSingle();
+    await sendMessage(
+      chatId,
+      devuelto
+        ? `Devuelto: ${escapeHtml(devuelto.equipo)} (${escapeHtml(devuelto.prestado_a)}).`
+        : "Ese préstamo ya estaba marcado como devuelto."
+    );
     return;
   }
 
