@@ -186,6 +186,14 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   );
   const rutinasHoy = useMemo(() => rutinasDelDia(rutinas, infoHoy), [rutinas, infoHoy]);
   const registroByRutina = new Map(registros.map((r) => [r.rutina_id, r]));
+  const rutinaById = new Map(rutinas.map((r) => [r.id, r]));
+
+  // "Hecho hoy": tickets resueltos y rutinas completadas en una sola línea de
+  // tiempo, para que el trabajo del día se vea aunque no hayan entrado tickets.
+  const hechoHoy = [
+    ...resueltosHoy.map((t) => ({ tipo: "ticket" as const, at: t.resolved_at!, ticket: t })),
+    ...registros.map((reg) => ({ tipo: "rutina" as const, at: reg.completada_at, registro: reg })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
   const tecnicoById = new Map(tecnicos.map((t) => [t.id, t]));
 
   async function asignar(ticket: Ticket, tecnicoId: number | null) {
@@ -195,12 +203,12 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     if (error) alert(`No se pudo asignar el ticket: ${error.message}`);
   }
 
-  async function toggleRutina(rutina: Rutina) {
+  async function toggleRutina(rutina: Rutina, responsable: number | null) {
     if (kiosk) return;
     const registro = registroByRutina.get(rutina.id);
     const { error } = registro
       ? await supabase.from("rutina_registros").delete().eq("id", registro.id)
-      : await supabase.from("rutina_registros").insert({ rutina_id: rutina.id, fecha: hoy, tecnico_id: rutina.tecnico_id });
+      : await supabase.from("rutina_registros").insert({ rutina_id: rutina.id, fecha: hoy, tecnico_id: responsable });
     if (error) alert(`No se pudo actualizar la rutina: ${error.message}`);
   }
 
@@ -356,22 +364,40 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
 
         <section className="hoy-col">
           <h3 className="hoy-col-title" style={{ borderColor: "#4ade80", color: "#4ade80" }}>
-            Resueltos hoy
-            <span className="hoy-col-count">{resueltosHoy.length}</span>
+            Hecho hoy
+            <span className="hoy-col-count">{hechoHoy.length}</span>
           </h3>
           <div className="hoy-col-body">
-            {resueltosHoy.length === 0 ? (
-              <p className="hoy-empty">Todavía nada resuelto hoy</p>
+            {hechoHoy.length === 0 ? (
+              <p className="hoy-empty">Todavía nada hecho hoy</p>
             ) : (
-              resueltosHoy.map((t) => (
-                <article key={t.id} className="hoy-done" onClick={() => !kiosk && onOpenTicket(t)}>
-                  <span className="hoy-card-id">#{t.id}</span>
-                  <span className="hoy-done-area">{t.areas?.nombre ?? "Sin área"}</span>
-                  <span className="hoy-done-meta">
-                    {t.tecnicos?.nombre ?? "Sin asignar"} · {formatGtTime(t.resolved_at!)}
-                  </span>
-                </article>
-              ))
+              hechoHoy.map((item) =>
+                item.tipo === "ticket" ? (
+                  <article
+                    key={`t-${item.ticket.id}`}
+                    className="hoy-done"
+                    onClick={() => !kiosk && onOpenTicket(item.ticket)}
+                  >
+                    <span className="hoy-card-id">#{item.ticket.id}</span>
+                    <span className="hoy-done-area">{item.ticket.areas?.nombre ?? "Sin área"}</span>
+                    <span className="hoy-done-meta">
+                      {item.ticket.tecnicos?.nombre ?? "Sin asignar"} · {formatGtTime(item.at)}
+                    </span>
+                  </article>
+                ) : (
+                  <article key={`r-${item.registro.id}`} className="hoy-done hoy-done-rutina">
+                    <span className="hoy-card-id">✓</span>
+                    <span className="hoy-done-area">
+                      {rutinaById.get(item.registro.rutina_id)?.nombre ?? "Rutina"}
+                    </span>
+                    <span className="hoy-done-meta">
+                      Rutina ·{" "}
+                      {item.registro.tecnico_id ? tecnicoById.get(item.registro.tecnico_id)?.nombre ?? "—" : "—"} ·{" "}
+                      {formatGtTime(item.at)}
+                    </span>
+                  </article>
+                )
+              )
             )}
           </div>
         </section>
@@ -396,15 +422,15 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           </p>
         ) : (
           <div className="hoy-rutinas-list">
-            {rutinasHoy.map(({ rutina: r, hora: horaRutina }) => {
+            {rutinasHoy.map(({ rutina: r, hora: horaRutina, responsable }) => {
               const registro = registroByRutina.get(r.id);
-              const tecnico = r.tecnico_id ? tecnicoById.get(r.tecnico_id) : undefined;
+              const tecnico = responsable ? tecnicoById.get(responsable) : undefined;
               const atrasada = !registro && !!horaRutina && horaRutina < hhmm;
               return (
                 <button
                   key={r.id}
                   className={`hoy-rutina${registro ? " done" : ""}${atrasada ? " atrasada" : ""}`}
-                  onClick={() => toggleRutina(r)}
+                  onClick={() => toggleRutina(r, responsable)}
                   disabled={kiosk}
                   title={r.descripcion ?? undefined}
                 >
@@ -413,6 +439,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
                   <span className="hoy-rutina-nombre">{r.nombre}</span>
                   {tecnico && (
                     <span className="hoy-rutina-tec" style={{ color: tecnico.color || undefined }}>
+                      {r.rotacion?.length ? "🔄 " : ""}
                       {tecnico.nombre}
                     </span>
                   )}

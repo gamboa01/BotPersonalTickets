@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ExcepcionDia, JornadaDia, Rutina, supabase, Tecnico } from "../supabaseClient";
-import { DIAS_CORTOS, DIAS_LARGOS, SEMANA, describirDias, describirHora } from "../rutinasUtils";
+import { DIAS_CORTOS, DIAS_LARGOS, SEMANA, describirDias, describirHora, responsableDelDia } from "../rutinasUtils";
 
 interface RutinasModalProps {
   rutinas: Rutina[];
@@ -15,6 +15,7 @@ interface RutinaDraft {
   nombre: string;
   descripcion: string;
   tecnico_id: number | null;
+  rotacion: number[];
   referencia: "fija" | "salida";
   hora: string;
   minutos_salida: number;
@@ -26,6 +27,7 @@ const NUEVA: RutinaDraft = {
   nombre: "",
   descripcion: "",
   tecnico_id: null,
+  rotacion: [],
   referencia: "fija",
   hora: "08:00",
   minutos_salida: 0,
@@ -73,12 +75,14 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
 
   function editar(r: Rutina) {
     setError(null);
+    setRotativoUI((r.rotacion ?? []).length > 0);
     setEditando({
       id: r.id,
       draft: {
         nombre: r.nombre,
         descripcion: r.descripcion ?? "",
         tecnico_id: r.tecnico_id,
+        rotacion: r.rotacion ?? [],
         referencia: r.referencia,
         hora: r.hora ?? "08:00",
         minutos_salida: r.minutos_salida,
@@ -92,16 +96,22 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
     setEditando((e) => (e ? { ...e, draft: { ...e.draft, [key]: value } } : e));
   }
 
+  // "Rotativo" se elige en el mismo selector de responsable; se distingue por tener rotación.
+  const [rotativoUI, setRotativoUI] = useState(false);
+  const rotativo = rotativoUI || (editando?.draft.rotacion.length ?? 0) > 0;
+
   async function guardarRutina() {
     if (!editando) return;
     const d = editando.draft;
     if (!d.nombre.trim()) return setError("Ponle un nombre a la rutina.");
     if (!d.dias.length) return setError("Elige al menos un día.");
     if (d.referencia === "fija" && !d.hora) return setError("Indica la hora.");
+    if (rotativo && d.rotacion.length < 2) return setError("Elige al menos dos personas para turnarse.");
     const row = {
       nombre: d.nombre.trim(),
       descripcion: d.descripcion.trim() || null,
-      tecnico_id: d.tecnico_id,
+      tecnico_id: rotativo ? null : d.tecnico_id,
+      rotacion: rotativo ? d.rotacion : [],
       referencia: d.referencia,
       hora: d.referencia === "fija" ? d.hora : null,
       minutos_salida: d.referencia === "salida" ? d.minutos_salida : 0,
@@ -183,10 +193,21 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
               <label htmlFor="rutTec">Responsable</label>
               <select
                 id="rutTec"
-                value={editando.draft.tecnico_id ?? ""}
-                onChange={(e) => setDraft("tecnico_id", e.target.value ? Number(e.target.value) : null)}
+                value={rotativo ? "rotativo" : editando.draft.tecnico_id ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "rotativo") {
+                    setRotativoUI(true);
+                    setDraft("rotacion", tecnicos.filter((t) => t.activo).map((t) => t.id));
+                  } else {
+                    setRotativoUI(false);
+                    setDraft("rotacion", []);
+                    setDraft("tecnico_id", v ? Number(v) : null);
+                  }
+                }}
               >
                 <option value="">Cualquiera</option>
+                <option value="rotativo">🔄 Rotativo (se turnan cada día)</option>
                 {tecnicos
                   .filter((t) => t.activo || t.id === editando.draft.tecnico_id)
                   .map((t) => (
@@ -195,6 +216,43 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
                     </option>
                   ))}
               </select>
+              {rotativo && (
+                <div className="rotacion-picker">
+                  {tecnicos
+                    .filter((t) => t.activo || editando.draft.rotacion.includes(t.id))
+                    .map((t) => {
+                      const dentro = editando.draft.rotacion.includes(t.id);
+                      return (
+                        <label key={t.id} className="equipo-activo">
+                          <input
+                            type="checkbox"
+                            checked={dentro}
+                            onChange={() =>
+                              setDraft(
+                                "rotacion",
+                                dentro
+                                  ? editando.draft.rotacion.filter((x) => x !== t.id)
+                                  : [...editando.draft.rotacion, t.id].sort((a, b) => a - b)
+                              )
+                            }
+                          />
+                          {t.nombre}
+                        </label>
+                      );
+                    })}
+                </div>
+              )}
+              {rotativo && editando.draft.rotacion.length >= 2 && (
+                <span className="doc-hint">
+                  Hoy le toca a{" "}
+                  <b>
+                    {tecnicoById.get(
+                      responsableDelDia({ rotacion: editando.draft.rotacion, tecnico_id: null } as Rutina, hoy) ?? -1
+                    )?.nombre ?? "—"}
+                  </b>
+                  ; mañana al siguiente, y así.
+                </span>
+              )}
             </div>
 
             <div className="doc-field">
@@ -298,6 +356,7 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
             <ul className="rutinas-admin">
               {ordenadas.map((r) => {
                 const tecnico = r.tecnico_id ? tecnicoById.get(r.tecnico_id) : undefined;
+                const turno = (r.rotacion ?? []).map((id) => tecnicoById.get(id)?.nombre ?? "?");
                 return (
                   <li key={r.id} className={r.activo ? "" : "inactiva"} onClick={() => editar(r)}>
                     <span className="rutinas-admin-hora">{describirHora(r)}</span>
@@ -305,8 +364,8 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
                       {r.nombre}
                       <small>{describirDias(r.dias)}</small>
                     </span>
-                    <span className="rutinas-admin-tec" style={{ color: tecnico?.color ?? undefined }}>
-                      {tecnico?.nombre ?? "Cualquiera"}
+                    <span className="rutinas-admin-tec" style={{ color: turno.length ? undefined : tecnico?.color ?? undefined }}>
+                      {turno.length ? `🔄 ${turno.join(" / ")}` : tecnico?.nombre ?? "Cualquiera"}
                     </span>
                   </li>
                 );
@@ -316,6 +375,7 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
               className="action-button action-button-primary"
               onClick={() => {
                 setError(null);
+                setRotativoUI(false);
                 setEditando({ id: null, draft: NUEVA });
               }}
             >

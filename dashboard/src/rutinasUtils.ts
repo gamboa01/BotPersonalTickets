@@ -6,6 +6,7 @@ export const DIAS_LARGOS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves"
 export const SEMANA = [1, 2, 3, 4, 5, 6, 0];
 
 export interface DiaInfo {
+  fecha: string;
   laboral: boolean;
   // Día de la semana cuyas rutinas aplican (en una reposición, el "como_dia").
   diaRef: number;
@@ -20,7 +21,19 @@ export function diaInfo(fecha: string, dow: number, jornada: JornadaDia[], excep
   const laboral = excepcion ? excepcion.laboral : base?.laboral ?? false;
   const diaRef = excepcion?.laboral && excepcion.como_dia !== null ? excepcion.como_dia : dow;
   const salida = excepcion?.hora_salida ?? jornada.find((j) => j.dia === diaRef)?.hora_salida ?? null;
-  return { laboral, diaRef, salida, excepcion };
+  return { fecha, laboral, diaRef, salida, excepcion };
+}
+
+// Día 0 de la rotación (un lunes). Se cuentan días de calendario: con dos
+// personas se alternan cada día y además el lunes cambia de semana a semana.
+const ROTACION_INICIO = Date.UTC(2026, 0, 5);
+
+export function responsableDelDia(rutina: Rutina, fecha: string) {
+  const turno = rutina.rotacion ?? [];
+  if (!turno.length) return rutina.tecnico_id;
+  const [y, m, d] = fecha.split("-").map(Number);
+  const dias = Math.round((Date.UTC(y, m - 1, d) - ROTACION_INICIO) / 86_400_000);
+  return turno[((dias % turno.length) + turno.length) % turno.length];
 }
 
 function sumarMinutos(hora: string, minutos: number) {
@@ -59,6 +72,6 @@ export function rutinasDelDia(rutinas: Rutina[], info: DiaInfo) {
   return rutinas
     .filter((r) => r.activo && r.dias.includes(info.diaRef))
     .filter((r) => r.referencia !== "fija" || !info.salida || !r.hora || r.hora <= info.salida)
-    .map((r) => ({ rutina: r, hora: horaRutina(r, info.salida) }))
+    .map((r) => ({ rutina: r, hora: horaRutina(r, info.salida), responsable: responsableDelDia(r, info.fecha) }))
     .sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99") || a.rutina.orden - b.rutina.orden);
 }

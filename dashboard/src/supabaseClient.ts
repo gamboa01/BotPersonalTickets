@@ -101,6 +101,8 @@ export interface Rutina {
   hora: string | null;
   dias: number[];
   tecnico_id: number | null;
+  // Si tiene técnicos, el responsable se turna entre ellos día a día (ignora tecnico_id).
+  rotacion: number[];
   activo: boolean;
   orden: number;
   // 'fija' usa `hora`; 'salida' usa la hora de salida del día + minutos_salida.
