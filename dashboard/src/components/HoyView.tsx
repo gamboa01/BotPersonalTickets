@@ -26,6 +26,9 @@ const SIN_ASIGNAR_COLOR = "#fb7185";
 const NUEVO_MS = 90_000;
 const SOUND_KEY = "hoy-sonido";
 const ALMUERZO_MIN = 60;
+// Respaldo del realtime: si la conexión en vivo se cae (pasa en pantallas que
+// están abiertas todo el día), los datos se vuelven a pedir cada minuto.
+const REFRESCO_MS = 60_000;
 
 // "Guillermo", "Guillermo y Luis", "Ana, Guillermo y Luis".
 function unirNombres(nombres: string[]) {
@@ -119,6 +122,11 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     loadAreas();
     loadRutinas();
     loadCalendario();
+    const refresco = setInterval(() => {
+      loadAreas();
+      loadRutinas();
+      loadCalendario();
+    }, REFRESCO_MS);
 
     const channel = supabase
       .channel("hoy-changes")
@@ -128,6 +136,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       .on("postgres_changes", { event: "*", schema: "public", table: "calendario_excepciones" }, loadCalendario)
       .subscribe();
     return () => {
+      clearInterval(refresco);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -150,6 +159,11 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     loadRegistros();
     loadAusencias();
     loadAlmuerzos();
+    const refresco = setInterval(() => {
+      loadRegistros();
+      loadAusencias();
+      loadAlmuerzos();
+    }, REFRESCO_MS);
     const channel = supabase
       .channel(`registros-${hoy}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "rutina_registros" }, loadRegistros)
@@ -157,6 +171,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       .on("postgres_changes", { event: "*", schema: "public", table: "almuerzos" }, loadAlmuerzos)
       .subscribe();
     return () => {
+      clearInterval(refresco);
       supabase.removeChannel(channel);
     };
   }, [hoy]);

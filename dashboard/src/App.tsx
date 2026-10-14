@@ -8,6 +8,7 @@ import { TicketsTable } from "./components/TicketsTable";
 import { TicketAccion, TicketDetailModal } from "./components/TicketDetailModal";
 import { RegistrarAtencionModal } from "./components/RegistrarAtencionModal";
 import { resizeImageFile } from "./imageUtils";
+import { vigilarNuevaVersion } from "./autoActualizar";
 import { Login } from "./components/Login";
 import { DocsView } from "./components/DocsView";
 import { PlantaView } from "./components/PlantaView";
@@ -20,7 +21,7 @@ const TREND_DAYS = 14;
 // #pantalla: la pantalla de TI (TV) muestra solo "Hoy", en grande y sin controles.
 const KIOSK = window.location.hash === "#pantalla";
 // Respaldo por si el realtime se cae en una pantalla que pasa el día abierta.
-const RELOAD_MS = 2 * 60_000;
+const RELOAD_MS = 60_000;
 
 function areaFromHash() {
   const match = window.location.hash.match(/^#area=(\d+)$/);
@@ -62,6 +63,9 @@ export default function App() {
 
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  // La pantalla de TI se recarga sola al publicarse una versión nueva del dashboard.
+  useEffect(() => (KIOSK ? vigilarNuevaVersion() : undefined), []);
 
   useEffect(() => {
     if (!session) return;
