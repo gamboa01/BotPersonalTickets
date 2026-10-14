@@ -41,11 +41,13 @@ El dashboard se despliega solo: `.github/workflows/deploy-dashboard.yml` compila
 
 ## Arquitectura
 
-### Modelo de acceso: el dashboard es de solo lectura, salvo `docs` y `areas`
+### Modelo de acceso: el dashboard es de solo lectura, salvo contenido propio del dashboard
 
 Todas las tablas (`tickets`, `categorias`, `comentarios`, `adjuntos`) tienen RLS restringido a un único email admin vía `auth.jwt() ->> 'email' = '...'` (ver `0004_dashboard_auth_rls.sql`). Las escrituras reales (crear/actualizar tickets) las hace **solo** la Edge Function del bot, usando la `service_role key` (nunca expuesta al frontend). El dashboard usa la `anon key` y por eso solo puede leer.
 
-Las excepciones son `docs` (módulo de Documentación, `0006_docs.sql`) y `areas` (croquis de la planta, `0011_areas.sql`) — ahí el dashboard sí tiene RLS de escritura completa (`for all`), porque ese contenido se edita solo desde el dashboard. El bot solo lee `areas` (para `/areas` y el paso de área en `/nuevo`).
+Las excepciones son `docs` (Documentación, `0006`), `areas` (croquis, `0011`) y `tecnicos`/`rutinas`/`rutina_registros` (pantalla Hoy, `0012`) — ahí el dashboard sí tiene RLS de escritura completa (`for all`), porque ese contenido se edita solo desde el dashboard. El bot solo lee `areas` (para `/areas` y el paso de área en `/nuevo`).
+
+Asignar un ticket es la única escritura del dashboard sobre `tickets`, y no usa RLS sino la función `asignar_ticket()` (`security definer`, valida el email admin): solo cambia `asignado_id`/`asignado_at` y deja un comentario en el historial. La columna de texto `asignado_a` de `0001` quedó sin uso.
 
 Al añadir una tabla nueva, seguir el mismo patrón por defecto (RLS de solo lectura para el dashboard) salvo que el feature sea explícitamente dashboard-only como `docs`.
 
@@ -73,7 +75,8 @@ Import/export de `docs` es JSON plano (`{"entries": [...]}`), aceptado tanto por
 
 ### Convenciones del dashboard
 
-- Sin router: navegación por estado (`view: "tickets" | "docs" | "planta"` en `App.tsx`), sin URLs de subpáginas. Única excepción: `#area=<id>` abre la pestaña Planta con esa área seleccionada (lo usa el link "Ver en el plano" de `/areas`, si existe el secret `DASHBOARD_URL`).
+- Sin router: navegación por estado (`view: "hoy" | "tickets" | "docs" | "planta"` en `App.tsx`, por defecto `hoy`), sin URLs de subpáginas. Excepciones por hash: `#area=<id>` abre Planta con esa área seleccionada (link "Ver en el plano" de `/areas`, si existe el secret `DASHBOARD_URL`) y `#pantalla` es el modo TV de TI: solo `HoyView` con `kiosk`, letra escalada con `em`/`vw`, sin controles de asignación, y recarga de tickets cada 2 min como respaldo del realtime.
+- Pantalla Hoy (`HoyView.tsx`): columnas Sin asignar / una por técnico activo / Resueltos hoy (día de Guatemala). Los tickets nuevos se detectan comparando contra los IDs vistos al montar (`knownIds`), parpadean 90 s y pueden sonar (WebAudio, preferencia en localStorage). Las rutinas solo se muestran y marcan; todavía no hay editor (se insertan por SQL en `rutinas`).
 - Realtime: cada vista (`tickets`, `docs`) se suscribe a su tabla vía `supabase.channel(...).on("postgres_changes", ...)` y recarga con la misma función `load()` que usa el mount inicial.
 - Fechas: los tickets se agrupan por día calendario de Guatemala (`timezone.ts` → `gtDayKey`), no por el día local del navegador de quien vea el dashboard — importante para no correr un ticket nocturno al día siguiente.
 - Gráficas (`recharts`): se usa barra horizontal (`RankedBarChart.tsx`) en vez de pie chart para comparar categorías/personas — decisión explícita para datasets con muchos segmentos.

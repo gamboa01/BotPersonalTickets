@@ -1,9 +1,11 @@
-import { Adjunto, Comentario, Ticket } from "../supabaseClient";
+import { Adjunto, Comentario, Tecnico, Ticket } from "../supabaseClient";
 import { formatGt } from "../timezone";
 import { botDeepLink } from "../telegram";
 
 interface TicketDetailModalProps {
   ticket: Ticket;
+  tecnicos: Tecnico[];
+  onAssign: (ticketId: number, tecnicoId: number | null) => void;
   comentarios: Comentario[];
   adjuntos: Adjunto[];
   loadingComentarios: boolean;
@@ -12,6 +14,8 @@ interface TicketDetailModalProps {
 
 export function TicketDetailModal({
   ticket,
+  tecnicos,
+  onAssign,
   comentarios,
   adjuntos,
   loadingComentarios,
@@ -39,6 +43,23 @@ export function TicketDetailModal({
           <dt>Estado</dt>
           <dd>
             <span className={`badge badge-${ticket.estado}`}>{ticket.estado}</span>
+          </dd>
+          <dt>Atiende</dt>
+          <dd>
+            <select
+              className="modal-assign"
+              value={ticket.asignado_id ?? ""}
+              onChange={(e) => onAssign(ticket.id, e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Sin asignar</option>
+              {tecnicos
+                .filter((t) => t.activo || t.id === ticket.asignado_id)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nombre}
+                  </option>
+                ))}
+            </select>
           </dd>
           <dt>Reportado por</dt>
           <dd>{ticket.reportado_por_nombre ?? ticket.reportado_por}</dd>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Adjunto, supabase, Comentario, Ticket } from "./supabaseClient";
+import { Adjunto, supabase, Comentario, Tecnico, Ticket } from "./supabaseClient";
 import { KpiCard } from "./components/KpiCard";
 import { RankedBarChart } from "./components/RankedBarChart";
 import { TrendChart } from "./components/TrendChart";
@@ -10,12 +10,18 @@ import { Login } from "./components/Login";
 import { RegistrarTicket } from "./components/RegistrarTicket";
 import { DocsView } from "./components/DocsView";
 import { PlantaView } from "./components/PlantaView";
+import { HoyView } from "./components/HoyView";
 import { gtDayKey } from "./timezone";
 import { botDeepLink } from "./telegram";
 
 const TREND_DAYS = 14;
 
 // Deep link desde el bot (/areas → "Ver en el plano"): #area=<id> abre la pestaña Planta.
+// #pantalla: la pantalla de TI (TV) muestra solo "Hoy", en grande y sin controles.
+const KIOSK = window.location.hash === "#pantalla";
+// Respaldo por si el realtime se cae en una pantalla que pasa el día abierta.
+const RELOAD_MS = 2 * 60_000;
+
 function areaFromHash() {
   const match = window.location.hash.match(/^#area=(\d+)$/);
   return match ? Number(match[1]) : null;
@@ -30,9 +36,10 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [initialAreaId] = useState(areaFromHash);
-  const [view, setView] = useState<"tickets" | "docs" | "planta">(initialAreaId !== null ? "planta" : "tickets");
+  const [view, setView] = useState<"hoy" | "tickets" | "docs" | "planta">(initialAreaId !== null ? "planta" : "hoy");
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
@@ -61,7 +68,7 @@ export default function App() {
     async function load() {
       const { data, error } = await supabase
         .from("tickets")
-        .select("*, categorias(nombre), areas(nombre)")
+        .select("*, categorias(nombre), areas(nombre), tecnicos(nombre)")
         .order("created_at", { ascending: false });
 
       if (!active) return;
@@ -73,7 +80,14 @@ export default function App() {
       setLoading(false);
     }
 
+    async function loadTecnicos() {
+      const { data } = await supabase.from("tecnicos").select("*").order("id");
+      if (active) setTecnicos((data ?? []) as Tecnico[]);
+    }
+
     load();
+    loadTecnicos();
+    const reload = setInterval(load, RELOAD_MS);
 
     // Vuelve a cargar la lista en cuanto el bot inserta o actualiza un
     // ticket, en vez de esperar a que alguien recargue la página a mano.
@@ -82,10 +96,15 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tickets" }, () => {
         load();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tecnicos" }, () => {
+        loadTecnicos();
+        load();
+      })
       .subscribe();
 
     return () => {
       active = false;
+      clearInterval(reload);
       supabase.removeChannel(channel);
     };
   }, [session]);
@@ -183,6 +202,27 @@ export default function App() {
   if (loading) return <div className="status-screen">Cargando datos...</div>;
   if (error) return <div className="status-screen error">Error al cargar datos: {error}</div>;
 
+  // El detalle abierto sigue al ticket actualizado (p. ej. después de asignarlo).
+  const ticketAbierto = selectedTicket ? tickets.find((t) => t.id === selectedTicket.id) ?? selectedTicket : null;
+
+  async function asignarTicket(ticketId: number, tecnicoId: number | null) {
+    const { error } = await supabase.rpc("asignar_ticket", { p_ticket_id: ticketId, p_tecnico_id: tecnicoId });
+    if (error) {
+      alert(`No se pudo asignar el ticket: ${error.message}`);
+      return;
+    }
+    const { data } = await supabase.from("comentarios").select("*").eq("ticket_id", ticketId).order("created_at");
+    setComentarios((data ?? []) as Comentario[]);
+  }
+
+  if (KIOSK) {
+    return (
+      <div className="kiosk-root">
+        <HoyView tickets={tickets} tecnicos={tecnicos} kiosk onOpenTicket={() => {}} />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header className="header-row">
@@ -190,6 +230,9 @@ export default function App() {
           <h1>Tickets TI · Textyler</h1>
           <p className="subtitle">Trazabilidad de incidencias reportadas vía Telegram</p>
           <nav className="tabs">
+            <button className={view === "hoy" ? "tab active" : "tab"} onClick={() => setView("hoy")}>
+              📅 Hoy
+            </button>
             <button className={view === "tickets" ? "tab active" : "tab"} onClick={() => setView("tickets")}>
               🎫 Tickets
             </button>
@@ -221,7 +264,9 @@ export default function App() {
         </div>
       </header>
 
-      {view === "docs" ? (
+      {view === "hoy" ? (
+        <HoyView tickets={tickets} tecnicos={tecnicos} kiosk={false} onOpenTicket={openTicket} />
+      ) : view === "docs" ? (
         <DocsView />
       ) : view === "planta" ? (
         <PlantaView tickets={tickets} initialAreaId={initialAreaId} onOpenTicket={openTicket} />
@@ -276,9 +321,11 @@ export default function App() {
       )}
 
       {/* Fuera de las vistas: también se abre desde la ficha de un área en Planta. */}
-      {selectedTicket && (
+      {ticketAbierto && (
         <TicketDetailModal
-          ticket={selectedTicket}
+          ticket={ticketAbierto}
+          tecnicos={tecnicos}
+          onAssign={asignarTicket}
           comentarios={comentarios}
           adjuntos={adjuntos}
           loadingComentarios={loadingComentarios}

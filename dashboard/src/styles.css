@@ -1457,3 +1457,406 @@ mark {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ---------- Hoy (pantalla del día) ---------- */
+
+/* Todo dentro de .hoy usa em: en modo pantalla basta subir el font-size. */
+.hoy {
+  font-size: 15px;
+}
+
+.kiosk-root {
+  min-height: 100vh;
+  padding: 1.2vw 1.4vw;
+}
+
+.hoy-kiosk {
+  font-size: clamp(16px, 1.05vw, 30px);
+}
+
+.hoy-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1em 2em;
+  margin-bottom: 1.2em;
+}
+
+.hoy-title {
+  margin: 0;
+  font-size: 1.6em;
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+}
+
+.hoy-date {
+  margin: 0.15em 0 0;
+  color: var(--text-muted);
+}
+
+.hoy-stats {
+  display: flex;
+  gap: 0.8em;
+  flex-wrap: wrap;
+}
+
+.hoy-stats div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 6.5em;
+  padding: 0.5em 0.9em;
+  border-radius: 0.7em;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.hoy-stats b {
+  font-size: 1.7em;
+  line-height: 1.1;
+  color: var(--neon-cyan);
+}
+
+.hoy-stats span {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hoy-clock {
+  margin-left: auto;
+  font-size: 2.4em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
+}
+
+.hoy-actions {
+  display: flex;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+.hoy-kiosk .hoy-actions .action-button {
+  opacity: 0.35;
+}
+
+.hoy-kiosk .hoy-actions .action-button:hover {
+  opacity: 1;
+}
+
+.hoy-board {
+  display: grid;
+  gap: 0.9em;
+  overflow-x: auto;
+  padding-bottom: 0.3em;
+}
+
+.hoy-col {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.8em;
+  padding: 0.8em;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hoy-kiosk .hoy-col {
+  min-height: 62vh;
+}
+
+.hoy-col-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.7em;
+  padding-bottom: 0.45em;
+  border-bottom: 2px solid;
+  font-size: 1.1em;
+}
+
+.hoy-col-count {
+  min-width: 1.7em;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 0.85em;
+  text-align: center;
+}
+
+.hoy-col-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+}
+
+.hoy-empty {
+  margin: 0.4em 0;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.hoy-card {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--neon-amber);
+  border-radius: 0.6em;
+  padding: 0.7em 0.8em;
+  cursor: pointer;
+}
+
+.hoy-kiosk .hoy-card {
+  cursor: default;
+}
+
+.hoy-card:hover {
+  border-color: rgba(34, 211, 238, 0.5);
+}
+
+.hoy-prio-critica {
+  border-left-color: #f43f5e;
+  box-shadow: 0 0 18px rgba(244, 63, 94, 0.18);
+}
+
+.hoy-prio-alta {
+  border-left-color: #fb923c;
+}
+
+.hoy-prio-media {
+  border-left-color: var(--neon-amber);
+}
+
+.hoy-prio-baja {
+  border-left-color: var(--neon-red);
+}
+
+.hoy-card-new {
+  animation: hoy-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes hoy-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.45), 0 0 26px rgba(34, 211, 238, 0.35);
+  }
+}
+
+.hoy-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  flex-wrap: wrap;
+}
+
+.hoy-card .badge {
+  font-size: 0.75em;
+}
+
+.hoy-card-id {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.hoy-card-age {
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.hoy-card-area {
+  margin-top: 0.45em;
+  font-size: 1.15em;
+  font-weight: 700;
+  color: var(--neon-cyan);
+}
+
+.hoy-card-where {
+  display: block;
+  font-size: 0.72em;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 0.1em;
+}
+
+.hoy-card-desc {
+  margin: 0.4em 0 0;
+  font-size: 0.92em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.hoy-card-foot {
+  display: flex;
+  gap: 0.3em;
+  flex-wrap: wrap;
+  margin-top: 0.45em;
+  font-size: 0.78em;
+  color: var(--text-muted);
+}
+
+.hoy-assign,
+.modal-assign {
+  margin-top: 0.6em;
+  width: 100%;
+  padding: 0.4em 0.5em;
+  border-radius: 0.5em;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.85em;
+}
+
+.modal-assign {
+  margin-top: 0;
+  width: auto;
+  font-size: 13px;
+}
+
+.hoy-done {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1em 0.5em;
+  padding: 0.5em 0.7em;
+  border-radius: 0.5em;
+  background: rgba(74, 222, 128, 0.06);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  cursor: pointer;
+}
+
+.hoy-kiosk .hoy-done {
+  cursor: default;
+}
+
+.hoy-done-area {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hoy-done-meta {
+  grid-column: 2;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.hoy-rutinas {
+  margin-top: 1em;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.8em;
+  padding: 0.8em 1em;
+}
+
+.hoy-rutinas h3 {
+  margin: 0 0 0.6em;
+  font-size: 0.85em;
+  color: var(--neon-cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hoy-rutinas-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.hoy-rutina {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.45em 0.8em;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.hoy-rutina:disabled {
+  cursor: default;
+  color: var(--text);
+}
+
+.hoy-rutina.done {
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.hoy-rutina.done .hoy-rutina-nombre {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.hoy-rutina-hora {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.hoy-rutina-tec {
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
+.equipo-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.equipo-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.equipo-list li.inactivo input[type="text"] {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.equipo-list input[type="text"],
+.equipo-add input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.equipo-activo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.equipo-add {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .hoy-clock {
+    margin-left: 0;
+  }
+}

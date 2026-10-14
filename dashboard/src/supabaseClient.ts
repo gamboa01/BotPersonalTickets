@@ -25,6 +25,9 @@ export interface Ticket {
   categorias?: { nombre: string } | null;
   area_id: number | null;
   areas?: { nombre: string } | null;
+  asignado_id: number | null;
+  asignado_at: string | null;
+  tecnicos?: { nombre: string } | null;
 }
 
 export interface Categoria {
@@ -79,4 +82,34 @@ export interface Area {
   notas: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Equipo de TI que atiende tickets (pantalla Hoy).
+export interface Tecnico {
+  id: number;
+  nombre: string;
+  color: string | null;
+  activo: boolean;
+  created_at: string;
+}
+
+// `dias` sigue extract(dow) de Postgres: 0 = domingo … 6 = sábado.
+export interface Rutina {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  hora: string | null;
+  dias: number[];
+  tecnico_id: number | null;
+  activo: boolean;
+  orden: number;
+  created_at: string;
+}
+
+export interface RutinaRegistro {
+  id: number;
+  rutina_id: number;
+  fecha: string;
+  tecnico_id: number | null;
+  completada_at: string;
 }

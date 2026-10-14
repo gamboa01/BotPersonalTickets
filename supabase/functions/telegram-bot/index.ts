@@ -623,7 +623,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       }
       const { data: ticket } = await supabase
         .from("tickets")
-        .select("*, categorias(nombre), areas(nombre)")
+        .select("*, categorias(nombre), areas(nombre), tecnicos(nombre)")
         .eq("id", id)
         .maybeSingle();
       if (!ticket || (!isAdmin(telegramId) && ticket.reportado_por !== telegramId)) {
@@ -643,6 +643,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         `Categoría: ${escapeHtml(ticket.categorias?.nombre ?? "-")}\n` +
         `Prioridad: ${ticket.prioridad}\n` +
         `Estado: ${ticket.estado}\n` +
+        `Atiende: ${escapeHtml(ticket.tecnicos?.nombre ?? "Sin asignar")}\n` +
         `Descripción: ${escapeHtml(ticket.descripcion)}\n` +
         `Creado: ${formatGt(ticket.created_at)}`;
       if (ticket.resolved_at) {

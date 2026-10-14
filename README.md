@@ -111,6 +111,12 @@ Para que `/areas` incluya el link "Ver en el plano", configura la URL del dashbo
 supabase secrets set DASHBOARD_URL=https://tu-usuario.github.io/nombre-del-repo/
 ```
 
+## 8. Pantalla del día (pestaña Hoy)
+
+La migración `0012_equipo_rutinas.sql` agrega el equipo de TI (`tecnicos`), la asignación de tickets y la base de rutinas diarias. En **Hoy** se ve lo que entró en el día, a qué área hay que ir y quién lo atiende; desde la PC se asigna con el selector de cada tarjeta (o en el detalle del ticket), y **👥 Equipo** administra quién atiende.
+
+Para la TV de TI abre el dashboard con `#pantalla` al final de la URL (o el botón **📺 Abrir en pantalla**): muestra solo la pantalla del día, en grande y sin controles. Inicia sesión una vez en ese navegador; la sesión se conserva.
+
 ## Flujo del bot
 
 Disponibles para cualquier usuario:

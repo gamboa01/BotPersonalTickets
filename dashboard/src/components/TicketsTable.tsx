@@ -29,6 +29,7 @@ export function TicketsTable({ tickets, onRowClick }: TicketsTableProps) {
             <th>Categoría</th>
             <th>Prioridad</th>
             <th>Estado</th>
+            <th>Atiende</th>
             <th>Reportado por</th>
             <th>Creado</th>
           </tr>
@@ -46,6 +47,7 @@ export function TicketsTable({ tickets, onRowClick }: TicketsTableProps) {
               <td>
                 <span className={`badge badge-${t.estado}`}>{ESTADO_LABEL[t.estado]}</span>
               </td>
+              <td>{t.tecnicos?.nombre ?? "-"}</td>
               <td>{t.reportado_por_nombre ?? t.reportado_por}</td>
               <td>{formatGt(t.created_at)}</td>
             </tr>
