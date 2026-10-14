@@ -247,6 +247,15 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     if (error) alert(`No se pudo asignar el ticket: ${error.message}`);
   }
 
+  // Hora con la que queda registrada una rutina: la del clic si se marca a
+  // tiempo; si se confirma después de su hora + margen, esa hora límite (la
+  // misma que usa el marcado automático), no la del momento en que se marcó.
+  function horaRegistro(hora: string | null) {
+    if (!hora) return new Date().toISOString();
+    const limite = sumarMinutos(hora, MARGEN_AUTO_MIN);
+    return limite <= hhmm ? new Date(`${hoy}T${limite}:00-06:00`).toISOString() : new Date().toISOString();
+  }
+
   // Clic: pendiente → hecha → no se hizo → hecha… Una "no se hizo" vuelve a
   // pendiente solo si todavía no pasó su hora + margen (si no, se remarcaría sola).
   async function toggleRutina(rutina: Rutina, responsable: number | null, hora: string | null) {
@@ -254,13 +263,15 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     const registro = registroByRutina.get(rutina.id);
     const vencida = !!hora && sumarMinutos(hora, MARGEN_AUTO_MIN) <= hhmm;
     const { error } = !registro
-      ? await supabase.from("rutina_registros").insert({ rutina_id: rutina.id, fecha: hoy, tecnico_id: responsable })
+      ? await supabase
+          .from("rutina_registros")
+          .insert({ rutina_id: rutina.id, fecha: hoy, tecnico_id: responsable, completada_at: horaRegistro(hora) })
       : !registro.omitida
         ? await supabase.from("rutina_registros").update({ omitida: true }).eq("id", registro.id)
         : vencida
           ? await supabase
               .from("rutina_registros")
-              .update({ omitida: false, automatica: false, completada_at: new Date().toISOString() })
+              .update({ omitida: false, automatica: false, completada_at: horaRegistro(hora) })
               .eq("id", registro.id)
           : await supabase.from("rutina_registros").delete().eq("id", registro.id);
     if (error) alert(`No se pudo actualizar la rutina: ${error.message}`);
@@ -370,7 +381,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           fecha: hoy,
           tecnico_id: responsable,
           automatica: true,
-          completada_at: new Date(`${hoy}T${hora}:00-06:00`).toISOString(),
+          completada_at: new Date(`${hoy}T${sumarMinutos(hora!, MARGEN_AUTO_MIN)}:00-06:00`).toISOString(),
         })),
         { onConflict: "rutina_id,fecha", ignoreDuplicates: true }
       )
