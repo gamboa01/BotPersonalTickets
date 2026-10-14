@@ -159,4 +159,8 @@ export interface Almuerzo {
   inicio: string;
   fin: string;
   regreso: string | null;
+  // Lo marcó el dashboard a las 12:00 (no la persona).
+  automatico: boolean;
+  // "Sigo trabajando": se canceló el automático y el almuerzo sigue pendiente.
+  pospuesto: boolean;
 }

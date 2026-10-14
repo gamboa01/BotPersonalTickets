@@ -26,6 +26,8 @@ const SIN_ASIGNAR_COLOR = "#fb7185";
 const NUEVO_MS = 90_000;
 const SOUND_KEY = "hoy-sonido";
 const ALMUERZO_MIN = 60;
+// A esta hora el almuerzo se marca solo para quien no esté ausente.
+const ALMUERZO_HORA = "12:00";
 // Respaldo del realtime: si la conexión en vivo se cae (pasa en pantallas que
 // están abiertas todo el día), los datos se vuelven a pedir cada minuto.
 const REFRESCO_MS = 60_000;
@@ -94,6 +96,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const knownIds = useRef<Set<number> | null>(null);
   const [registrosListos, setRegistrosListos] = useState<string | null>(null);
   const autoIntentadas = useRef<Set<string>>(new Set());
+  const almuerzoIntentado = useRef<string | null>(null);
 
   const hoy = gtDayKey(new Date(now).toISOString());
 
@@ -359,10 +362,51 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         inicio: inicio.toISOString(),
         fin: new Date(inicio.getTime() + ALMUERZO_MIN * 60_000).toISOString(),
         regreso: null,
+        automatico: false,
+        pospuesto: false,
       },
       { onConflict: "tecnico_id,fecha" }
     );
     if (error) alert(`No se pudo marcar el almuerzo: ${error.message}`);
+  }
+
+  // Almuerzo automático: al llegar las 12:00 de un día laboral (que no termine
+  // antes), se marca para quien esté activo, no ausente y sin almuerzo hoy. Quien
+  // siga trabajando lo pospone con "Sigo trabajando" y lo marca a mano al salir.
+  useEffect(() => {
+    const finAuto = sumarMinutos(ALMUERZO_HORA, ALMUERZO_MIN);
+    if (registrosListos !== hoy || almuerzoIntentado.current === hoy) return;
+    if (!infoHoy.laboral || hhmm < ALMUERZO_HORA || hhmm >= finAuto) return;
+    if (infoHoy.salida && infoHoy.salida <= ALMUERZO_HORA) return;
+    almuerzoIntentado.current = hoy;
+    const conAlmuerzo = new Set(almuerzos.map((a) => a.tecnico_id));
+    const pendientes = tecnicos.filter(
+      (t) => t.activo && !conAlmuerzo.has(t.id) && !ausenteA(ausenciaByTecnico.get(t.id), ALMUERZO_HORA)
+    );
+    if (!pendientes.length) return;
+    supabase
+      .from("almuerzos")
+      .upsert(
+        pendientes.map((t) => ({
+          tecnico_id: t.id,
+          fecha: hoy,
+          inicio: new Date(`${hoy}T${ALMUERZO_HORA}:00-06:00`).toISOString(),
+          fin: new Date(`${hoy}T${finAuto}:00-06:00`).toISOString(),
+          automatico: true,
+        })),
+        { onConflict: "tecnico_id,fecha", ignoreDuplicates: true }
+      )
+      .then(({ error }) => {
+        if (error) console.error("No se pudo marcar el almuerzo automático:", error.message);
+      });
+  }, [registrosListos, hoy, hhmm, infoHoy, almuerzos, tecnicos, ausenciaByTecnico]);
+
+  async function seguirTrabajando(almuerzo: Almuerzo) {
+    const { error } = await supabase
+      .from("almuerzos")
+      .update({ regreso: new Date().toISOString(), pospuesto: true })
+      .eq("id", almuerzo.id);
+    if (error) alert(`No se pudo actualizar el almuerzo: ${error.message}`);
   }
 
   async function regresoAlmuerzo(almuerzo: Almuerzo) {
@@ -541,11 +585,14 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             <span key={tecnico.id} className={`hoy-equipo-chip ${estado}`}>
               <i style={{ background: tecnico.color || "#22d3ee" }} />
               <b>{tecnico.nombre}</b>
-              {estado === "disponible" && "Disponible"}
+              {estado === "disponible" && (almuerzo?.pospuesto ? "Disponible · almuerzo pendiente" : "Disponible")}
               {estado === "ausente" && "Ausente"}
               {estado === "almuerzo" && `En almuerzo hasta ${formatGtTime(almuerzo!.fin)}`}
               {!kiosk && estado === "disponible" && (
                 <button onClick={() => salirAlmuerzo(tecnico.id)}>🍽️ Almuerzo</button>
+              )}
+              {!kiosk && estado === "almuerzo" && almuerzo!.automatico && (
+                <button onClick={() => seguirTrabajando(almuerzo!)}>💼 Sigo trabajando</button>
               )}
               {!kiosk && estado === "almuerzo" && <button onClick={() => regresoAlmuerzo(almuerzo!)}>Regresó</button>}
             </span>
