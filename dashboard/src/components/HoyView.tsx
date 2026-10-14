@@ -26,13 +26,12 @@ const PRIORIDAD_LABEL: Record<Ticket["prioridad"], string> = {
 const SIN_ASIGNAR_COLOR = "#fb7185";
 const NUEVO_MS = 90_000;
 const SOUND_KEY = "hoy-sonido";
-const ALMUERZO_MIN = 60;
+// El almuerzo dura 45 min: al cumplirse, la persona aparece disponible. Si
+// alguien se queda más, se le suman minutos con "+15 min".
+const ALMUERZO_MIN = 45;
+const EXTENSION_MIN = 15;
 // A esta hora el almuerzo se marca solo para quien no esté ausente.
 const ALMUERZO_HORA = "12:00";
-// Pasada la hora prevista de regreso, la persona sigue "en almuerzo" hasta que
-// se marque "Regresó" (la hora es lo planeado, no lo real). Solo si nadie lo
-// marca en este tiempo extra se da por de vuelta.
-const ALMUERZO_EXTRA_MIN = 60;
 // Respaldo del realtime: si la conexión en vivo se cae (pasa en pantallas que
 // están abiertas todo el día), los datos se vuelven a pedir cada minuto.
 const REFRESCO_MS = 60_000;
@@ -337,26 +336,19 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       const almuerzo = almuerzoByTecnico.get(t.id);
       const estado: "ausente" | "almuerzo" | "disponible" = ausenteA(ausenciaByTecnico.get(t.id), hhmm)
         ? "ausente"
-        : almuerzo && !almuerzo.regreso && now < new Date(almuerzo.fin).getTime() + ALMUERZO_EXTRA_MIN * 60_000
+        : almuerzo && !almuerzo.regreso && now < new Date(almuerzo.fin).getTime()
           ? "almuerzo"
           : "disponible";
-      const tarde = estado === "almuerzo" && now >= new Date(almuerzo!.fin).getTime();
-      return { tecnico: t, estado, almuerzo, tarde };
+      return { tecnico: t, estado, almuerzo };
     });
   const enAlmuerzo = equipoAhora.filter((e) => e.estado === "almuerzo");
   const disponibles = equipoAhora.filter((e) => e.estado === "disponible");
   const regresoEquipo = enAlmuerzo.map((e) => e.almuerzo!.fin).sort()[0];
-  // Ya pasó la hora prevista del primero en volver y nadie marcó su regreso.
-  const regresoTarde = !!regresoEquipo && now >= new Date(regresoEquipo).getTime();
   const avisoEquipo = !enAlmuerzo.length
     ? null
     : disponibles.length
-      ? `${unirNombres(
-          enAlmuerzo.map((e) => `${e.tecnico.nombre} (${e.tarde ? "regresa en breve" : `regresa ${formatGtTime(e.almuerzo!.fin)}`})`)
-        )} en almuerzo · ${unirNombres(disponibles.map((e) => e.tecnico.nombre))} ${disponibles.length > 1 ? "pueden" : "puede"} atenderte`
-      : regresoTarde
-        ? "Estamos en almuerzo · Regresamos en breve"
-        : `Estamos en almuerzo · Regresamos a las ${formatGtTime(regresoEquipo!)}`;
+      ? `${unirNombres(enAlmuerzo.map((e) => `${e.tecnico.nombre} (regresa ${formatGtTime(e.almuerzo!.fin)})`))} en almuerzo · ${unirNombres(disponibles.map((e) => e.tecnico.nombre))} ${disponibles.length > 1 ? "pueden" : "puede"} atenderte`
+      : `Estamos en almuerzo · Regresamos a las ${formatGtTime(regresoEquipo!)}`;
 
   const todosEnAlmuerzo = enAlmuerzo.length > 0 && disponibles.length === 0;
   const minutosParaRegreso = regresoEquipo
@@ -410,6 +402,12 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         if (error) console.error("No se pudo marcar el almuerzo automático:", error.message);
       });
   }, [registrosListos, hoy, hhmm, infoHoy, almuerzos, tecnicos, ausenciaByTecnico]);
+
+  async function extenderAlmuerzo(almuerzo: Almuerzo) {
+    const fin = new Date(new Date(almuerzo.fin).getTime() + EXTENSION_MIN * 60_000).toISOString();
+    const { error } = await supabase.from("almuerzos").update({ fin }).eq("id", almuerzo.id);
+    if (error) alert(`No se pudo extender el almuerzo: ${error.message}`);
+  }
 
   async function seguirTrabajando(almuerzo: Almuerzo) {
     const { error } = await supabase
@@ -584,33 +582,33 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         <div className="almuerzo-overlay">
           <UtensilsCrossed className="almuerzo-icono" />
           <h2>Estamos en tiempo de almuerzo</h2>
-          <p className="almuerzo-regreso">
-            {regresoTarde ? "Regresamos en breve" : `Regresamos a las ${formatGtTime(regresoEquipo!)}`}
+          <p className="almuerzo-regreso">Regresamos a las {formatGtTime(regresoEquipo!)}</p>
+          <p className="almuerzo-falta">
+            {minutosParaRegreso <= 1 ? "En un momento" : `En ${minutosParaRegreso} minutos`}
           </p>
-          {!regresoTarde && (
-            <p className="almuerzo-falta">
-              {minutosParaRegreso <= 1 ? "En un momento" : `En ${minutosParaRegreso} minutos`}
-            </p>
-          )}
           <p className="almuerzo-reloj">{hora}</p>
         </div>
       )}
 
       {equipoAhora.length > 0 && (
         <div className="hoy-equipo">
-          {equipoAhora.map(({ tecnico, estado, almuerzo, tarde }) => (
+          {equipoAhora.map(({ tecnico, estado, almuerzo }) => (
             <span key={tecnico.id} className={`hoy-equipo-chip ${estado}`}>
               <i style={{ background: tecnico.color || "#22d3ee" }} />
               <b>{tecnico.nombre}</b>
               {estado === "disponible" && (almuerzo?.pospuesto ? "Disponible · almuerzo pendiente" : "Disponible")}
               {estado === "ausente" && "Ausente"}
-              {estado === "almuerzo" &&
-                (tarde ? "En almuerzo · regresa en breve" : `En almuerzo hasta ${formatGtTime(almuerzo!.fin)}`)}
+              {estado === "almuerzo" && `En almuerzo hasta ${formatGtTime(almuerzo!.fin)}`}
               {!kiosk && estado === "disponible" && (
                 <button onClick={() => salirAlmuerzo(tecnico.id)}><UtensilsCrossed size={13} /> Almuerzo</button>
               )}
               {!kiosk && estado === "almuerzo" && almuerzo!.automatico && (
                 <button onClick={() => seguirTrabajando(almuerzo!)}><Briefcase size={13} /> Sigo trabajando</button>
+              )}
+              {!kiosk && estado === "almuerzo" && (
+                <button onClick={() => extenderAlmuerzo(almuerzo!)}>
+                  <Plus size={13} /> {EXTENSION_MIN} min
+                </button>
               )}
               {!kiosk && estado === "almuerzo" && <button onClick={() => regresoAlmuerzo(almuerzo!)}>Regresó</button>}
             </span>
