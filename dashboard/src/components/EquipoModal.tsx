@@ -1,17 +1,65 @@
-import { useState } from "react";
-import { supabase, Tecnico } from "../supabaseClient";
+import { useEffect, useState } from "react";
+import { Ausencia, supabase, Tecnico } from "../supabaseClient";
 import { AREA_COLORS } from "../planUtils";
 
 interface EquipoModalProps {
   tecnicos: Tecnico[];
+  hoy: string;
   onClose: () => void;
+}
+
+function formatFecha(fecha: string, hoy: string) {
+  if (fecha === hoy) return "Hoy";
+  const [y, m, d] = fecha.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("es-GT", {
+    timeZone: "UTC",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 // Quién atiende tickets. No se borran técnicos (los tickets viejos conservan
 // quién los atendió): se desactivan y dejan de salir como columna y en "Asignar".
-export function EquipoModal({ tecnicos, onClose }: EquipoModalProps) {
+export function EquipoModal({ tecnicos, hoy, onClose }: EquipoModalProps) {
   const [nuevo, setNuevo] = useState("");
   const [saving, setSaving] = useState(false);
+  const [ausencias, setAusencias] = useState<Ausencia[]>([]);
+  const [ausencia, setAusencia] = useState({ tecnico_id: 0, fecha: hoy, desde: "", cubre_id: 0, nota: "" });
+
+  async function loadAusencias() {
+    const { data } = await supabase.from("ausencias").select("*").gte("fecha", hoy).order("fecha");
+    setAusencias((data ?? []) as Ausencia[]);
+  }
+
+  useEffect(() => {
+    loadAusencias();
+  }, [hoy]);
+
+  async function marcarAusencia() {
+    if (!ausencia.tecnico_id) return alert("Elige quién se ausenta.");
+    const { error } = await supabase.from("ausencias").upsert(
+      {
+        tecnico_id: ausencia.tecnico_id,
+        fecha: ausencia.fecha || hoy,
+        desde: ausencia.desde || null,
+        cubre_id: ausencia.cubre_id || null,
+        nota: ausencia.nota.trim() || null,
+      },
+      { onConflict: "tecnico_id,fecha" }
+    );
+    if (error) return alert(`No se pudo guardar la ausencia: ${error.message}`);
+    setAusencia({ tecnico_id: 0, fecha: hoy, desde: "", cubre_id: 0, nota: "" });
+    loadAusencias();
+  }
+
+  async function quitarAusencia(id: number) {
+    const { error } = await supabase.from("ausencias").delete().eq("id", id);
+    if (error) return alert(`No se pudo quitar: ${error.message}`);
+    loadAusencias();
+  }
+
+  const nombre = (id: number | null) => tecnicos.find((t) => t.id === id)?.nombre ?? "—";
 
   async function update(id: number, changes: Partial<Tecnico>) {
     const { error } = await supabase.from("tecnicos").update(changes).eq("id", id);
@@ -83,6 +131,85 @@ export function EquipoModal({ tecnicos, onClose }: EquipoModalProps) {
             + Agregar
           </button>
         </div>
+
+        <section className="ausencias">
+          <h3 className="area-subtitle">Ausencias</h3>
+          <p className="doc-hint">
+            Las rutinas de quien se ausenta (desde la hora indicada, o todo el día) pasan a quien cubre. Si no eliges a
+            nadie, las toma otra persona activa del equipo.
+          </p>
+          <div className="ausencia-form">
+            <select
+              value={ausencia.tecnico_id}
+              onChange={(e) => setAusencia((a) => ({ ...a, tecnico_id: Number(e.target.value) }))}
+            >
+              <option value={0}>¿Quién se ausenta?</option>
+              {tecnicos
+                .filter((t) => t.activo)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nombre}
+                  </option>
+                ))}
+            </select>
+            <input
+              type="date"
+              value={ausencia.fecha}
+              min={hoy}
+              onChange={(e) => setAusencia((a) => ({ ...a, fecha: e.target.value }))}
+            />
+            <label className="jornada-salida">
+              Desde
+              <input
+                type="time"
+                value={ausencia.desde}
+                onChange={(e) => setAusencia((a) => ({ ...a, desde: e.target.value }))}
+                title="Vacío = todo el día"
+              />
+            </label>
+            <select
+              value={ausencia.cubre_id}
+              onChange={(e) => setAusencia((a) => ({ ...a, cubre_id: Number(e.target.value) }))}
+            >
+              <option value={0}>Cubre: automático</option>
+              {tecnicos
+                .filter((t) => t.activo && t.id !== ausencia.tecnico_id)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    Cubre: {t.nombre}
+                  </option>
+                ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Nota (opcional)"
+              value={ausencia.nota}
+              onChange={(e) => setAusencia((a) => ({ ...a, nota: e.target.value }))}
+            />
+            <button className="action-button action-button-primary" onClick={marcarAusencia}>
+              Marcar ausente
+            </button>
+          </div>
+
+          {ausencias.length > 0 && (
+            <ul className="excepciones-list">
+              {ausencias.map((a) => (
+                <li key={a.id}>
+                  <span className="badge badge-en_progreso">{formatFecha(a.fecha, hoy)}</span>
+                  <span className="excepciones-fecha">
+                    {nombre(a.tecnico_id)} {a.desde ? `desde las ${a.desde}` : "todo el día"}
+                    <small>
+                      {[a.cubre_id ? `Cubre ${nombre(a.cubre_id)}` : "Cubre: automático", a.nota].filter(Boolean).join(" · ")}
+                    </small>
+                  </span>
+                  <button className="modal-close" aria-label="Quitar" onClick={() => quitarAusencia(a.id)}>
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

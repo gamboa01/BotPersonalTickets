@@ -135,3 +135,14 @@ export interface RutinaRegistro {
   tecnico_id: number | null;
   completada_at: string;
 }
+
+// Ausencia de un técnico: todo el día (desde = null) o desde una hora.
+export interface Ausencia {
+  id: number;
+  tecnico_id: number;
+  fecha: string;
+  desde: string | null;
+  cubre_id: number | null;
+  nota: string | null;
+  created_at: string;
+}

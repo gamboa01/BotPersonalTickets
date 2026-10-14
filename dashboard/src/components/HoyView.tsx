@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Area, ExcepcionDia, JornadaDia, Rutina, RutinaRegistro, supabase, Tecnico, Ticket } from "../supabaseClient";
+import { Area, Ausencia, ExcepcionDia, JornadaDia, Rutina, RutinaRegistro, supabase, Tecnico, Ticket } from "../supabaseClient";
 import { NIVEL_LABEL, ladoArea } from "../planUtils";
 import { formatGtTime, GT_TIMEZONE, gtDayKey, gtWeekday, timeAgo } from "../timezone";
 import { EquipoModal } from "./EquipoModal";
 import { RutinasModal } from "./RutinasModal";
-import { diaInfo, rutinasDelDia } from "../rutinasUtils";
+import { RegistrarAtencionModal } from "./RegistrarAtencionModal";
+import { ausenteA, cubrirAusencia, diaInfo, rutinasDelDia } from "../rutinasUtils";
 
 interface HoyViewProps {
   tickets: Ticket[];
@@ -24,6 +25,11 @@ const PRIORIDAD_LABEL: Record<Ticket["prioridad"], string> = {
 const SIN_ASIGNAR_COLOR = "#fb7185";
 const NUEVO_MS = 90_000;
 const SOUND_KEY = "hoy-sonido";
+
+// "lun 12": para los pendientes que vienen de días anteriores.
+function diaCorto(iso: string) {
+  return new Date(iso).toLocaleDateString("es-GT", { timeZone: GT_TIMEZONE, weekday: "short", day: "numeric" });
+}
 
 function isActive(t: Ticket) {
   return t.estado === "abierto" || t.estado === "en_progreso";
@@ -69,6 +75,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const [jornada, setJornada] = useState<JornadaDia[]>([]);
   const [excepciones, setExcepciones] = useState<ExcepcionDia[]>([]);
   const [showRutinas, setShowRutinas] = useState(false);
+  const [showRegistrar, setShowRegistrar] = useState(false);
+  const [ausencias, setAusencias] = useState<Ausencia[]>([]);
   const [recientes, setRecientes] = useState<Map<number, number>>(new Map());
   const [sonido, setSonido] = useState(readSoundPref);
   const [showEquipo, setShowEquipo] = useState(false);
@@ -121,10 +129,16 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       const { data } = await supabase.from("rutina_registros").select("*").eq("fecha", hoy);
       setRegistros((data ?? []) as RutinaRegistro[]);
     }
+    async function loadAusencias() {
+      const { data } = await supabase.from("ausencias").select("*").eq("fecha", hoy);
+      setAusencias((data ?? []) as Ausencia[]);
+    }
     loadRegistros();
+    loadAusencias();
     const channel = supabase
       .channel(`registros-${hoy}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "rutina_registros" }, loadRegistros)
+      .on("postgres_changes", { event: "*", schema: "public", table: "ausencias" }, loadAusencias)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -160,6 +174,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   );
   const entraronHoy = tickets.filter((t) => gtDayKey(t.created_at) === hoy).length;
 
+  const ausenciaByTecnico = useMemo(() => new Map(ausencias.map((a) => [a.tecnico_id, a])), [ausencias]);
+
   // Columnas: sin asignar, una por técnico activo (o con tickets aún asignados) y resueltos hoy.
   const columnas = useMemo(() => {
     const visibles = tecnicos.filter((tec) => tec.activo || activos.some((t) => t.asignado_id === tec.id));
@@ -168,6 +184,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         key: "sin",
         titulo: "Sin asignar",
         color: SIN_ASIGNAR_COLOR,
+        ausente: undefined as Ausencia | undefined,
         tickets: activos.filter((t) => !t.asignado_id || !visibles.some((tec) => tec.id === t.asignado_id)),
       },
       ...visibles.map((tec) => ({
@@ -175,16 +192,25 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         titulo: tec.nombre,
         color: tec.color || "#22d3ee",
         tickets: activos.filter((t) => t.asignado_id === tec.id),
+        ausente: ausenciaByTecnico.get(tec.id),
       })),
     ];
-  }, [tecnicos, activos]);
+  }, [tecnicos, activos, ausenciaByTecnico]);
 
   // Descanso, reposición u hora de salida distinta: lo decide el calendario.
   const infoHoy = useMemo(
     () => diaInfo(hoy, gtWeekday(new Date(now)), jornada, excepciones),
     [hoy, now, jornada, excepciones]
   );
-  const rutinasHoy = useMemo(() => rutinasDelDia(rutinas, infoHoy), [rutinas, infoHoy]);
+  // Si el responsable del día falta a esa hora, la rutina pasa a quien lo cubre.
+  const rutinasHoy = useMemo(
+    () =>
+      rutinasDelDia(rutinas, infoHoy).map((item) => ({
+        ...item,
+        ...cubrirAusencia(item.responsable, item.hora, ausencias, tecnicos),
+      })),
+    [rutinas, infoHoy, ausencias, tecnicos]
+  );
   const registroByRutina = new Map(registros.map((r) => [r.rutina_id, r]));
   const rutinaById = new Map(rutinas.map((r) => [r.id, r]));
 
@@ -257,6 +283,11 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           <span className="hoy-card-id">#{t.id}</span>
           <span className={`badge badge-${t.prioridad}`}>{PRIORIDAD_LABEL[t.prioridad]}</span>
           {t.estado === "en_progreso" && <span className="badge badge-en_progreso">En progreso</span>}
+          {gtDayKey(t.created_at) !== hoy && (
+            <span className="hoy-card-arrastre" title="Pendiente de un día anterior">
+              Desde {diaCorto(t.created_at)}
+            </span>
+          )}
           <span className="hoy-card-age">{timeAgo(t.created_at, now)}</span>
         </div>
         <div className="hoy-card-area">
@@ -331,6 +362,9 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             </button>
           ) : (
             <>
+              <button className="action-button action-button-primary" onClick={() => setShowRegistrar(true)}>
+                + Registrar atención
+              </button>
               <button className="action-button" onClick={() => setShowEquipo(true)}>
                 👥 Equipo
               </button>
@@ -349,7 +383,14 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         {columnas.map((col) => (
           <section key={col.key} className="hoy-col">
             <h3 className="hoy-col-title" style={{ borderColor: col.color, color: col.color }}>
-              {col.titulo}
+              <span>
+                {col.titulo}
+                {col.ausente && ausenteA(col.ausente, hhmm) && (
+                  <span className="hoy-col-ausente">
+                    Ausente{col.ausente.desde ? ` desde ${col.ausente.desde}` : ""}
+                  </span>
+                )}
+              </span>
               <span className="hoy-col-count">{col.tickets.length}</span>
             </h3>
             <div className="hoy-col-body">
@@ -422,7 +463,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           </p>
         ) : (
           <div className="hoy-rutinas-list">
-            {rutinasHoy.map(({ rutina: r, hora: horaRutina, responsable }) => {
+            {rutinasHoy.map(({ rutina: r, hora: horaRutina, responsable, cubreA }) => {
               const registro = registroByRutina.get(r.id);
               const tecnico = responsable ? tecnicoById.get(responsable) : undefined;
               const atrasada = !registro && !!horaRutina && horaRutina < hhmm;
@@ -443,6 +484,9 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
                       {tecnico.nombre}
                     </span>
                   )}
+                  {cubreA && (
+                    <span className="hoy-rutina-cubre">cubre a {tecnicoById.get(cubreA)?.nombre ?? "—"}</span>
+                  )}
                   {registro && <span className="hoy-rutina-hora">{formatGtTime(registro.completada_at)}</span>}
                 </button>
               );
@@ -451,7 +495,10 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         )}
       </section>
 
-      {showEquipo && <EquipoModal tecnicos={tecnicos} onClose={() => setShowEquipo(false)} />}
+      {showEquipo && <EquipoModal tecnicos={tecnicos} hoy={hoy} onClose={() => setShowEquipo(false)} />}
+      {showRegistrar && (
+        <RegistrarAtencionModal areas={areas} tecnicos={tecnicos} onClose={() => setShowRegistrar(false)} />
+      )}
       {showRutinas && (
         <RutinasModal
           rutinas={rutinas}

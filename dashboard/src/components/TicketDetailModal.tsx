@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Adjunto, Comentario, Tecnico, Ticket } from "../supabaseClient";
 import { formatGt } from "../timezone";
 import { botDeepLink } from "../telegram";
@@ -6,6 +7,7 @@ interface TicketDetailModalProps {
   ticket: Ticket;
   tecnicos: Tecnico[];
   onAssign: (ticketId: number, tecnicoId: number | null) => void;
+  onResolve: (ticketId: number, nota: string) => Promise<boolean>;
   comentarios: Comentario[];
   adjuntos: Adjunto[];
   loadingComentarios: boolean;
@@ -16,11 +18,26 @@ export function TicketDetailModal({
   ticket,
   tecnicos,
   onAssign,
+  onResolve,
   comentarios,
   adjuntos,
   loadingComentarios,
   onClose,
 }: TicketDetailModalProps) {
+  const [resolviendo, setResolviendo] = useState(false);
+  const [nota, setNota] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  async function resolver() {
+    setGuardando(true);
+    const ok = await onResolve(ticket.id, nota);
+    setGuardando(false);
+    if (ok) {
+      setResolviendo(false);
+      setNota("");
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -79,14 +96,15 @@ export function TicketDetailModal({
               <a className="action-button" href={botDeepLink("seguimiento", ticket.id)} target="_blank" rel="noreferrer">
                 🔧 Dar seguimiento
               </a>
-              <a
-                className="action-button action-button-primary"
-                href={botDeepLink("resolver", ticket.id)}
-                target="_blank"
-                rel="noreferrer"
-              >
+              <button className="action-button action-button-primary" onClick={() => setResolviendo(true)}>
                 ✅ Resolver
-              </a>
+              </button>
+              {/* Por el bot se avisa por Telegram a quien lo reportó; desde aquí no. */}
+              {ticket.reportado_por !== 0 && (
+                <a className="action-button" href={botDeepLink("resolver", ticket.id)} target="_blank" rel="noreferrer">
+                  ✅ Resolver por Telegram
+                </a>
+              )}
             </>
           )}
           {(ticket.estado === "resuelto" || ticket.estado === "cerrado") && (
@@ -98,6 +116,25 @@ export function TicketDetailModal({
             📎 Adjuntar foto
           </a>
         </div>
+
+        {resolviendo && (
+          <div className="resolver-inline">
+            <input
+              type="text"
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && resolver()}
+              placeholder="Qué se hizo (opcional)"
+              autoFocus
+            />
+            <button className="action-button action-button-primary" onClick={resolver} disabled={guardando}>
+              {guardando ? "Guardando..." : "Marcar resuelto"}
+            </button>
+            <button className="action-button" onClick={() => setResolviendo(false)}>
+              Cancelar
+            </button>
+          </div>
+        )}
 
         <h3>Descripción</h3>
         <p className="modal-descripcion">{ticket.descripcion}</p>

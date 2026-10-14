@@ -1,4 +1,4 @@
-import { ExcepcionDia, JornadaDia, Rutina } from "./supabaseClient";
+import { Ausencia, ExcepcionDia, JornadaDia, Rutina, Tecnico } from "./supabaseClient";
 
 export const DIAS_CORTOS = ["D", "L", "M", "X", "J", "V", "S"];
 export const DIAS_LARGOS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -74,4 +74,31 @@ export function rutinasDelDia(rutinas: Rutina[], info: DiaInfo) {
     .filter((r) => r.referencia !== "fija" || !info.salida || !r.hora || r.hora <= info.salida)
     .map((r) => ({ rutina: r, hora: horaRutina(r, info.salida), responsable: responsableDelDia(r, info.fecha) }))
     .sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99") || a.rutina.orden - b.rutina.orden);
+}
+
+// ¿Está ausente el técnico a esa hora? Sin hora (p. ej. salida desconocida),
+// solo cuenta una ausencia de todo el día.
+export function ausenteA(ausencia: Ausencia | undefined, hora: string | null) {
+  if (!ausencia) return false;
+  if (!ausencia.desde) return true;
+  return !!hora && hora >= ausencia.desde;
+}
+
+// Si el responsable falta a la hora de la rutina, la cubre quien diga la
+// ausencia o, si no dice, la primera persona activa que no esté ausente.
+export function cubrirAusencia(
+  responsable: number | null,
+  hora: string | null,
+  ausencias: Ausencia[],
+  tecnicos: Tecnico[]
+): { responsable: number | null; cubreA: number | null } {
+  if (responsable === null) return { responsable, cubreA: null };
+  const porTecnico = new Map(ausencias.map((a) => [a.tecnico_id, a]));
+  const ausencia = porTecnico.get(responsable);
+  if (!ausenteA(ausencia, hora)) return { responsable, cubreA: null };
+  const suplente =
+    (ausencia!.cubre_id !== null && !ausenteA(porTecnico.get(ausencia!.cubre_id), hora) ? ausencia!.cubre_id : null) ??
+    tecnicos.find((t) => t.activo && t.id !== responsable && !ausenteA(porTecnico.get(t.id), hora))?.id ??
+    null;
+  return { responsable: suplente, cubreA: responsable };
 }

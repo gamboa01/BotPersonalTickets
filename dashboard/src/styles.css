@@ -2121,3 +2121,69 @@ mark {
   gap: 14px;
   margin-top: 8px;
 }
+
+.resolver-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.resolver-inline input {
+  flex: 1 1 220px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.atencion-resuelto {
+  margin: 4px 0 12px;
+}
+
+.hoy-card-arrastre {
+  font-size: 0.75em;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: var(--neon-amber);
+}
+
+.hoy-col-ausente {
+  margin-left: 0.4em;
+  font-size: 0.7em;
+  font-weight: 500;
+  color: var(--neon-amber);
+}
+
+.hoy-rutina-cubre {
+  font-size: 0.75em;
+  color: var(--neon-amber);
+}
+
+.ausencias {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.ausencia-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ausencia-form select,
+.ausencia-form input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  padding: 6px 8px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: inherit;
+}

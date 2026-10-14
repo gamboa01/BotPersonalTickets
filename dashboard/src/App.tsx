@@ -215,6 +215,17 @@ export default function App() {
     setComentarios((data ?? []) as Comentario[]);
   }
 
+  async function resolverTicket(ticketId: number, nota: string) {
+    const { error } = await supabase.rpc("resolver_ticket", { p_ticket_id: ticketId, p_nota: nota });
+    if (error) {
+      alert(`No se pudo resolver el ticket: ${error.message}`);
+      return false;
+    }
+    const { data } = await supabase.from("comentarios").select("*").eq("ticket_id", ticketId).order("created_at");
+    setComentarios((data ?? []) as Comentario[]);
+    return true;
+  }
+
   if (KIOSK) {
     return (
       <div className="kiosk-root">
@@ -326,6 +337,7 @@ export default function App() {
           ticket={ticketAbierto}
           tecnicos={tecnicos}
           onAssign={asignarTicket}
+          onResolve={resolverTicket}
           comentarios={comentarios}
           adjuntos={adjuntos}
           loadingComentarios={loadingComentarios}
