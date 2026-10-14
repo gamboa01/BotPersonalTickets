@@ -106,6 +106,45 @@ function normalizar(text: string) {
   return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
+// Clave para comparar nombres de área escritos a mano: sin mayúsculas, tildes,
+// signos ni palabras de relleno, así "Depto. de Corte", "CORTE" y "corte" son
+// la misma área.
+const PALABRAS_RELLENO = new Set(["departamento", "depto", "dpto", "area", "de", "del", "la", "el", "los", "las"]);
+function claveArea(text: string) {
+  return normalizar(text)
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((w) => w && !PALABRAS_RELLENO.has(w))
+    .join(" ");
+}
+
+// Siglas de un nombre de varias palabras ("recursos humanos" → "rh"). Lo que se
+// escribe se compara quitando letras repetidas seguidas, porque en español las
+// siglas en plural se duplican: "RRHH" → "rh".
+function siglasArea(clave: string) {
+  const palabras = clave.split(" ");
+  return palabras.length >= 2 ? palabras.map((w) => w[0]).join("") : "";
+}
+
+// Busca el área que corresponde a lo escrito: coincidencia exacta, siglas o, si
+// no, todas las coincidencias parciales (puede haber varias, p. ej. "bodega").
+function buscarAreas<T extends { nombre: string }>(texto: string, areas: T[]): T[] {
+  const buscado = claveArea(texto);
+  if (!buscado) return [];
+  const exacta = areas.find((a) => claveArea(a.nombre) === buscado);
+  if (exacta) return [exacta];
+  const sinRepetir = buscado.replace(/(.)\1+/g, "$1");
+  const porSiglas = areas.filter((a) => {
+    const siglas = siglasArea(claveArea(a.nombre));
+    return siglas && (siglas === buscado || siglas === sinRepetir);
+  });
+  if (porSiglas.length) return porSiglas;
+  return areas.filter((a) => {
+    const clave = claveArea(a.nombre);
+    return clave && (clave.includes(buscado) || buscado.includes(clave));
+  });
+}
+
 // deno-lint-ignore no-explicit-any
 function areaRows(areas: any[]) {
   const rows = [];
@@ -836,12 +875,8 @@ async function registroRapido(chatId: number, telegramId: number, lineas: string
   const solicitud = resto.join("\n");
 
   const { data: areas } = await supabase.from("areas").select("id, nombre").neq("tipo", "referencia");
-  const buscado = normalizar(depto);
-  const exacta = (areas ?? []).find((a) => normalizar(a.nombre) === buscado);
-  const parciales = (areas ?? []).filter(
-    (a) => normalizar(a.nombre).includes(buscado) || buscado.includes(normalizar(a.nombre))
-  );
-  const area = exacta ?? (parciales.length === 1 ? parciales[0] : null);
+  const candidatas = buscarAreas(depto, areas ?? []);
+  const area = candidatas.length === 1 ? candidatas[0] : null;
 
   const { data: ticket, error } = await supabase
     .from("tickets")
@@ -871,12 +906,17 @@ async function registroRapido(chatId: number, telegramId: number, lineas: string
     `📍 ${escapeHtml(area?.nombre ?? depto)}\n` +
     `👤 ${escapeHtml(nombre)}\n` +
     `📝 ${escapeHtml(solicitud)}`;
-  if (!area) {
+  if (!area && candidatas.length > 1) {
+    msg += `\n\n📍 Hay varias áreas que coinciden con "${escapeHtml(depto)}", ¿cuál es?`;
+  } else if (!area) {
     msg += `\n\n⚠️ No encontré el área "${escapeHtml(depto)}" en el croquis; quedó sin área (corrígelo en el dashboard con ✏️ Editar).`;
   }
   await sendMessage(chatId, msg, {
     reply_markup: {
       inline_keyboard: [
+        ...(!area ? areaRows(candidatas).map((fila) =>
+          fila.map((b) => ({ text: `📍 ${b.text}`, callback_data: `rapar:${ticket.id}:${b.callback_data.split(":")[1]}` }))
+        ) : []),
         [
           { text: "✅ Ya quedó resuelto", callback_data: `rapres:${ticket.id}` },
           { text: "🚫 Anular", callback_data: `rapanul:${ticket.id}` },
@@ -978,6 +1018,20 @@ async function handleCallback(callback: any) {
 
   if (data === "foto:si") {
     await sendMessage(chatId, "Envía la foto ahora.");
+    return;
+  }
+
+  // Registro rápido con varias áreas posibles: se elige con un botón.
+  if (data.startsWith("rapar:")) {
+    const [, ticketTexto, areaTexto] = data.split(":");
+    const ticketId = Number(ticketTexto);
+    const { data: area } = await supabase.from("areas").select("id, nombre").eq("id", Number(areaTexto)).maybeSingle();
+    if (!area) return;
+    await supabase.from("tickets").update({ area_id: area.id }).eq("id", ticketId);
+    await supabase
+      .from("comentarios")
+      .insert({ ticket_id: ticketId, autor: callback.from.first_name ?? "Bot", texto: `Área elegida: ${area.nombre}` });
+    await sendMessage(chatId, `📍 Ticket #${ticketId}: área ${escapeHtml(area.nombre)}.`);
     return;
   }
 

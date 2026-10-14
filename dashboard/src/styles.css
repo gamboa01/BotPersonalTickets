@@ -2315,3 +2315,61 @@ mark {
 .hoy-equipo-chip button:hover {
   border-color: var(--neon-cyan);
 }
+
+.almuerzo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  padding: 2em;
+  text-align: center;
+  background: radial-gradient(circle at center, #1a1405 0%, #05070d 75%);
+  color: var(--text);
+  font-size: clamp(16px, 1.4vw, 34px);
+}
+
+.almuerzo-emoji {
+  font-size: 6em;
+  line-height: 1;
+  animation: almuerzo-flotar 3s ease-in-out infinite;
+}
+
+@keyframes almuerzo-flotar {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.15em);
+  }
+}
+
+.almuerzo-overlay h2 {
+  margin: 0.3em 0 0;
+  font-size: 3.2em;
+  color: var(--neon-amber);
+  text-shadow: 0 0 30px rgba(251, 191, 36, 0.35);
+}
+
+.almuerzo-regreso {
+  margin: 0;
+  font-size: 2.2em;
+  font-weight: 700;
+}
+
+.almuerzo-falta {
+  margin: 0;
+  font-size: 1.4em;
+  color: var(--text-muted);
+}
+
+.almuerzo-reloj {
+  margin: 1.2em 0 0;
+  font-size: 1.6em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}

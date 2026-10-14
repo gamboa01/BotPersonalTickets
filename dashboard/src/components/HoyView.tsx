@@ -318,6 +318,12 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           enAlmuerzo.map((e) => e.almuerzo!.fin).sort()[0]
         )}`;
 
+  const todosEnAlmuerzo = enAlmuerzo.length > 0 && disponibles.length === 0;
+  const regresoEquipo = enAlmuerzo.map((e) => e.almuerzo!.fin).sort()[0];
+  const minutosParaRegreso = regresoEquipo
+    ? Math.max(0, Math.ceil((new Date(regresoEquipo).getTime() - now) / 60_000))
+    : 0;
+
   async function salirAlmuerzo(tecnicoId: number) {
     const inicio = new Date();
     const { error } = await supabase.from("almuerzos").upsert(
@@ -486,7 +492,22 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         </div>
       </header>
 
-      {avisoEquipo && <div className={`hoy-aviso${disponibles.length ? "" : " todos"}`}>{avisoEquipo}</div>}
+      {avisoEquipo && !(kiosk && todosEnAlmuerzo) && (
+        <div className={`hoy-aviso${disponibles.length ? "" : " todos"}`}>{avisoEquipo}</div>
+      )}
+
+      {/* En la pantalla de TI, si no queda nadie, el aviso ocupa toda la pantalla. */}
+      {kiosk && todosEnAlmuerzo && (
+        <div className="almuerzo-overlay">
+          <div className="almuerzo-emoji">🍽️</div>
+          <h2>Estamos en tiempo de almuerzo</h2>
+          <p className="almuerzo-regreso">Regresamos a las {formatGtTime(regresoEquipo!)}</p>
+          <p className="almuerzo-falta">
+            {minutosParaRegreso <= 1 ? "En un momento" : `En ${minutosParaRegreso} minutos`}
+          </p>
+          <p className="almuerzo-reloj">{hora}</p>
+        </div>
+      )}
 
       {equipoAhora.length > 0 && (
         <div className="hoy-equipo">
