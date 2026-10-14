@@ -1711,28 +1711,6 @@ mark {
   color: var(--text-muted);
 }
 
-.hoy-rutinas {
-  margin-top: 1em;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 0.8em;
-  padding: 0.8em 1em;
-}
-
-.hoy-rutinas h3 {
-  margin: 0 0 0.6em;
-  font-size: 0.85em;
-  color: var(--neon-cyan);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.hoy-rutinas-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5em;
-}
-
 .hoy-rutina {
   display: inline-flex;
   align-items: center;
@@ -1838,20 +1816,6 @@ mark {
 .hoy-jornada.descanso {
   border-color: rgba(251, 191, 36, 0.4);
   color: var(--neon-amber);
-}
-
-.hoy-rutinas h3 {
-  display: flex;
-  align-items: center;
-  gap: 0.6em;
-}
-
-.hoy-rutinas-count {
-  padding: 0.05em 0.55em;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  letter-spacing: 0;
 }
 
 .hoy-rutina.atrasada {
@@ -2482,4 +2446,41 @@ mark {
 
 .prio-critica {
   background: #f43f5e;
+}
+
+.hoy-col-sub {
+  margin: 0.6em 0 0;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.hoy-col-body .hoy-rutina {
+  width: 100%;
+  justify-content: flex-start;
+  border-radius: 0.5em;
+  text-align: left;
+}
+
+.hoy-col-body .hoy-rutina-nombre {
+  flex: 1;
+}
+
+.hoy-f11 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.hoy-f11 kbd {
+  padding: 0.05em 0.45em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-alt);
+  color: var(--text);
+  font-family: inherit;
 }

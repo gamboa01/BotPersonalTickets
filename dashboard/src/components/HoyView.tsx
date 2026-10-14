@@ -235,6 +235,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     ];
   }, [tecnicos, activos, ausenciaByTecnico]);
 
+  type RutinaDelDia = (typeof rutinasHoy)[number];
+
   // Descanso, reposición u hora de salida distinta: lo decide el calendario.
   const infoHoy = useMemo(
     () => diaInfo(hoy, gtWeekday(new Date(now)), jornada, excepciones),
@@ -249,6 +251,25 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       })),
     [rutinas, infoHoy, ausencias, tecnicos]
   );
+  // Rutinas que siguen pendientes (o que se marcaron como "no se hizo") van en la
+  // columna de su responsable del día, debajo de sus tickets; las de "Cualquiera"
+  // o de alguien sin columna, en "Sin asignar". Las hechas pasan a "Hecho hoy".
+  const rutinasPorColumna = useMemo(() => {
+    const visibles = new Set(columnas.map((c) => c.key));
+    const mapa = new Map<string, RutinaDelDia[]>();
+    for (const item of rutinasHoy) {
+      const registro = registros.find((reg) => reg.rutina_id === item.rutina.id);
+      if (registro && !registro.omitida) continue;
+      const clave = item.responsable && visibles.has(`tec-${item.responsable}`) ? `tec-${item.responsable}` : "sin";
+      mapa.set(clave, [...(mapa.get(clave) ?? []), item]);
+    }
+    return mapa;
+  }, [rutinasHoy, registros, columnas]);
+  const rutinasHechas = rutinasHoy.filter(({ rutina }) => {
+    const reg = registros.find((r) => r.rutina_id === rutina.id);
+    return reg && !reg.omitida;
+  }).length;
+
   const registroByRutina = useMemo(() => new Map(registros.map((r) => [r.rutina_id, r])), [registros]);
   const rutinaById = new Map(rutinas.map((r) => [r.id, r]));
 
@@ -310,10 +331,22 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     if (next) beep();
   }
 
-  function pantallaCompleta() {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else document.documentElement.requestFullscreen?.();
+  // La pantalla completa de la página (Fullscreen API) se pierde en cada
+  // recarga y no se puede reactivar sin un clic; la del navegador (F11 o modo
+  // kiosco) sí se mantiene. Por eso en la pantalla de TI se sugiere F11.
+  function enPantallaCompleta() {
+    return !!document.fullscreenElement || window.innerHeight >= window.screen.height - 2;
   }
+  const [pantallaCompletaActiva, setPantallaCompletaActiva] = useState(enPantallaCompleta);
+  useEffect(() => {
+    const actualizar = () => setPantallaCompletaActiva(enPantallaCompleta());
+    window.addEventListener("resize", actualizar);
+    document.addEventListener("fullscreenchange", actualizar);
+    return () => {
+      window.removeEventListener("resize", actualizar);
+      document.removeEventListener("fullscreenchange", actualizar);
+    };
+  }, []);
 
   const fechaLarga = new Date(now).toLocaleDateString("es-GT", {
     timeZone: GT_TIMEZONE,
@@ -460,6 +493,36 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     ? [infoHoy.salida && `Salida ${infoHoy.salida}`, nota].filter(Boolean).join(" · ")
     : `Descanso${nota && nota !== "Descanso" ? ` · ${nota}` : ""}`;
 
+  function renderRutina({ rutina: r, hora: horaRutina, responsable, cubreA }: RutinaDelDia, enSuColumna: boolean) {
+    const registro = registroByRutina.get(r.id);
+    const tecnico = responsable ? tecnicoById.get(responsable) : undefined;
+    const atrasada = !registro && !!horaRutina && horaRutina < hhmm;
+    const estado = !registro ? "" : registro.omitida ? " omitida" : registro.automatica ? " done auto" : " done";
+    return (
+      <button
+        key={r.id}
+        className={`hoy-rutina${estado}${atrasada ? " atrasada" : ""}`}
+        onClick={() => toggleRutina(r, responsable, horaRutina)}
+        disabled={kiosk}
+        title={r.descripcion ?? undefined}
+      >
+        <span className="hoy-rutina-check">
+          {!registro ? <Square size={16} /> : registro.omitida ? <CircleX size={16} /> : <CircleCheck size={16} />}
+        </span>
+        {horaRutina && <span className="hoy-rutina-hora">{horaRutina}</span>}
+        <span className="hoy-rutina-nombre">{r.nombre}</span>
+        {r.rotacion?.length ? <Repeat size={12} className="inline-icon" /> : null}
+        {tecnico && !enSuColumna && (
+          <span className="hoy-rutina-tec" style={{ color: tecnico.color || undefined }}>
+            {tecnico.nombre}
+          </span>
+        )}
+        {cubreA && <span className="hoy-rutina-cubre">cubre a {tecnicoById.get(cubreA)?.nombre ?? "—"}</span>}
+        {registro?.omitida && <span className="hoy-rutina-tag">no se hizo</span>}
+      </button>
+    );
+  }
+
   function renderCard(t: Ticket) {
     const area = t.area_id ? areaById.get(t.area_id) : undefined;
     const llegada = recientes.get(t.id);
@@ -541,6 +604,10 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             <b>{resueltosHoy.length}</b>
             <span>Resueltos hoy</span>
           </div>
+          <div>
+            <b>{infoHoy.laboral ? `${rutinasHechas}/${rutinasHoy.length}` : "—"}</b>
+            <span>{infoHoy.laboral ? "Rutinas" : "Descanso"}</span>
+          </div>
         </div>
         <div className="hoy-clock">{hora}</div>
         <div className="hoy-actions">
@@ -548,9 +615,11 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             {sonido ? <Bell size={16} /> : <BellOff size={16} />}
           </button>
           {kiosk ? (
-            <button className="action-button" onClick={pantallaCompleta}>
-              <Maximize size={15} /> Pantalla completa
-            </button>
+            !pantallaCompletaActiva && (
+              <span className="hoy-f11">
+                <Maximize size={15} /> Presiona <kbd>F11</kbd> para pantalla completa
+              </span>
+            )
           ) : (
             <>
               <button className="action-button action-button-primary" onClick={() => setShowRegistrar(true)}>
@@ -631,10 +700,16 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
               <span className="hoy-col-count">{col.tickets.length}</span>
             </h3>
             <div className="hoy-col-body">
-              {col.tickets.length === 0 ? (
+              {col.tickets.length === 0 && !rutinasPorColumna.get(col.key)?.length ? (
                 <p className="hoy-empty">{col.key === "sin" ? "Nada por asignar" : "Sin pendientes"}</p>
               ) : (
                 col.tickets.map(renderCard)
+              )}
+              {!!rutinasPorColumna.get(col.key)?.length && (
+                <>
+                  <h4 className="hoy-col-sub">Rutinas pendientes</h4>
+                  {rutinasPorColumna.get(col.key)!.map((item) => renderRutina(item, col.key !== "sin"))}
+                </>
               )}
             </div>
           </section>
@@ -681,67 +756,6 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         </section>
       </div>
 
-      <section className="hoy-rutinas">
-        <h3>
-          Rutinas de hoy
-          {rutinasHoy.length > 0 && (
-            <span className="hoy-rutinas-count">
-              {rutinasHoy.filter(({ rutina }) => {
-                const reg = registroByRutina.get(rutina.id);
-                return reg && !reg.omitida;
-              }).length}
-              /{rutinasHoy.length}
-            </span>
-          )}
-        </h3>
-        {rutinasHoy.length === 0 ? (
-          <p className="hoy-empty">
-            {!infoHoy.laboral
-              ? "Hoy es día de descanso: no hay rutinas."
-              : rutinas.length
-                ? "No hay rutinas para hoy."
-                : "Sin rutinas configuradas todavía."}
-          </p>
-        ) : (
-          <div className="hoy-rutinas-list">
-            {rutinasHoy.map(({ rutina: r, hora: horaRutina, responsable, cubreA }) => {
-              const registro = registroByRutina.get(r.id);
-              const tecnico = responsable ? tecnicoById.get(responsable) : undefined;
-              const atrasada = !registro && !!horaRutina && horaRutina < hhmm;
-              const estado = !registro ? "" : registro.omitida ? " omitida" : registro.automatica ? " done auto" : " done";
-              return (
-                <button
-                  key={r.id}
-                  className={`hoy-rutina${estado}${atrasada ? " atrasada" : ""}`}
-                  onClick={() => toggleRutina(r, responsable, horaRutina)}
-                  disabled={kiosk}
-                  title={r.descripcion ?? undefined}
-                >
-                  <span className="hoy-rutina-check">
-                    {!registro ? <Square size={16} /> : registro.omitida ? <CircleX size={16} /> : <CircleCheck size={16} />}
-                  </span>
-                  {horaRutina && <span className="hoy-rutina-hora">{horaRutina}</span>}
-                  <span className="hoy-rutina-nombre">{r.nombre}</span>
-                  {tecnico && (
-                    <span className="hoy-rutina-tec" style={{ color: tecnico.color || undefined }}>
-                      {r.rotacion?.length ? <Repeat size={12} className="inline-icon" /> : null}
-                      {tecnico.nombre}
-                    </span>
-                  )}
-                  {cubreA && (
-                    <span className="hoy-rutina-cubre">cubre a {tecnicoById.get(cubreA)?.nombre ?? "—"}</span>
-                  )}
-                  {registro?.omitida && <span className="hoy-rutina-tag">no se hizo</span>}
-                  {registro && !registro.omitida && registro.automatica && <span className="hoy-rutina-tag">auto</span>}
-                  {registro && !registro.omitida && !registro.automatica && (
-                    <span className="hoy-rutina-hora">{formatGtTime(registro.completada_at)}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
       {showEquipo && <EquipoModal tecnicos={tecnicos} hoy={hoy} onClose={() => setShowEquipo(false)} />}
       {showRegistrar && (
