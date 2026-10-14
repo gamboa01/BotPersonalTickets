@@ -6,7 +6,9 @@ Lado izquierdo x 0..28, lado derecho x 92..120. Por lado, filas fijas:
 Las gradas quedan a la misma altura en ambas plantas.
 """
 
-OUT = r"C:\GITHUB\BotPersonalTickets\supabase\migrations\0023_croquis_textyler.sql"
+import os
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "migrations", "0023_croquis_textyler.sql")
 
 LADO_X = {"izq": (0, 28), "der": (92, 28)}
 SEGMENTOS = {"seg0": (46, 14), "seg1": (30, 14), "seg2": (12, 16)}
