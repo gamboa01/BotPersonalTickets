@@ -6,6 +6,7 @@ import { EquipoModal } from "./EquipoModal";
 import { RutinasModal } from "./RutinasModal";
 import { RegistrarAtencionModal } from "./RegistrarAtencionModal";
 import { MARGEN_AUTO_MIN, ausenteA, cubrirAusencia, diaInfo, rutinasDelDia, sumarMinutos } from "../rutinasUtils";
+import { Bell, BellOff, Briefcase, Check, CircleCheck, CircleX, MapPin, Maximize, Plus, Repeat, Settings, Square, Tv, Users, UtensilsCrossed } from "lucide-react";
 
 interface HoyViewProps {
   tickets: Ticket[];
@@ -28,6 +29,10 @@ const SOUND_KEY = "hoy-sonido";
 const ALMUERZO_MIN = 60;
 // A esta hora el almuerzo se marca solo para quien no esté ausente.
 const ALMUERZO_HORA = "12:00";
+// Pasada la hora prevista de regreso, la persona sigue "en almuerzo" hasta que
+// se marque "Regresó" (la hora es lo planeado, no lo real). Solo si nadie lo
+// marca en este tiempo extra se da por de vuelta.
+const ALMUERZO_EXTRA_MIN = 60;
 // Respaldo del realtime: si la conexión en vivo se cae (pasa en pantallas que
 // están abiertas todo el día), los datos se vuelven a pedir cada minuto.
 const REFRESCO_MS = 60_000;
@@ -332,23 +337,28 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       const almuerzo = almuerzoByTecnico.get(t.id);
       const estado: "ausente" | "almuerzo" | "disponible" = ausenteA(ausenciaByTecnico.get(t.id), hhmm)
         ? "ausente"
-        : almuerzo && !almuerzo.regreso && now < new Date(almuerzo.fin).getTime()
+        : almuerzo && !almuerzo.regreso && now < new Date(almuerzo.fin).getTime() + ALMUERZO_EXTRA_MIN * 60_000
           ? "almuerzo"
           : "disponible";
-      return { tecnico: t, estado, almuerzo };
+      const tarde = estado === "almuerzo" && now >= new Date(almuerzo!.fin).getTime();
+      return { tecnico: t, estado, almuerzo, tarde };
     });
   const enAlmuerzo = equipoAhora.filter((e) => e.estado === "almuerzo");
   const disponibles = equipoAhora.filter((e) => e.estado === "disponible");
+  const regresoEquipo = enAlmuerzo.map((e) => e.almuerzo!.fin).sort()[0];
+  // Ya pasó la hora prevista del primero en volver y nadie marcó su regreso.
+  const regresoTarde = !!regresoEquipo && now >= new Date(regresoEquipo).getTime();
   const avisoEquipo = !enAlmuerzo.length
     ? null
     : disponibles.length
-      ? `🍽️ ${unirNombres(enAlmuerzo.map((e) => `${e.tecnico.nombre} (regresa ${formatGtTime(e.almuerzo!.fin)})`))} en almuerzo · ${unirNombres(disponibles.map((e) => e.tecnico.nombre))} ${disponibles.length > 1 ? "pueden" : "puede"} atenderte`
-      : `🍽️ Estamos en almuerzo · Regresamos a las ${formatGtTime(
-          enAlmuerzo.map((e) => e.almuerzo!.fin).sort()[0]
-        )}`;
+      ? `${unirNombres(
+          enAlmuerzo.map((e) => `${e.tecnico.nombre} (${e.tarde ? "regresa en breve" : `regresa ${formatGtTime(e.almuerzo!.fin)}`})`)
+        )} en almuerzo · ${unirNombres(disponibles.map((e) => e.tecnico.nombre))} ${disponibles.length > 1 ? "pueden" : "puede"} atenderte`
+      : regresoTarde
+        ? "Estamos en almuerzo · Regresamos en breve"
+        : `Estamos en almuerzo · Regresamos a las ${formatGtTime(regresoEquipo!)}`;
 
   const todosEnAlmuerzo = enAlmuerzo.length > 0 && disponibles.length === 0;
-  const regresoEquipo = enAlmuerzo.map((e) => e.almuerzo!.fin).sort()[0];
   const minutosParaRegreso = regresoEquipo
     ? Math.max(0, Math.ceil((new Date(regresoEquipo).getTime() - now) / 60_000))
     : 0;
@@ -474,7 +484,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
           <span className="hoy-card-age">{timeAgo(t.created_at, now)}</span>
         </div>
         <div className="hoy-card-area">
-          📍 {area ? area.nombre : t.areas?.nombre ?? "Área no indicada"}
+          <MapPin size={16} className="inline-icon" /> {area ? area.nombre : t.areas?.nombre ?? "Área no indicada"}
           {area && (
             <span className="hoy-card-where">
               {NIVEL_LABEL[area.nivel]} · {ladoArea(area)}
@@ -537,25 +547,25 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         <div className="hoy-clock">{hora}</div>
         <div className="hoy-actions">
           <button className="action-button" onClick={toggleSonido} title="Sonido al entrar un ticket">
-            {sonido ? "🔔" : "🔕"}
+            {sonido ? <Bell size={16} /> : <BellOff size={16} />}
           </button>
           {kiosk ? (
             <button className="action-button" onClick={pantallaCompleta}>
-              ⛶ Pantalla completa
+              <Maximize size={15} /> Pantalla completa
             </button>
           ) : (
             <>
               <button className="action-button action-button-primary" onClick={() => setShowRegistrar(true)}>
-                + Registrar atención
+                <Plus size={15} /> Registrar atención
               </button>
               <button className="action-button" onClick={() => setShowEquipo(true)}>
-                👥 Equipo
+                <Users size={15} /> Equipo
               </button>
               <button className="action-button" onClick={() => setShowRutinas(true)}>
-                ⚙️ Rutinas
+                <Settings size={15} /> Rutinas
               </button>
               <a className="action-button" href="#pantalla" target="_blank" rel="noreferrer">
-                📺 Abrir en pantalla
+                <Tv size={15} /> Abrir en pantalla
               </a>
             </>
           )}
@@ -563,36 +573,44 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
       </header>
 
       {avisoEquipo && !(kiosk && todosEnAlmuerzo) && (
-        <div className={`hoy-aviso${disponibles.length ? "" : " todos"}`}>{avisoEquipo}</div>
+        <div className={`hoy-aviso${disponibles.length ? "" : " todos"}`}>
+          <UtensilsCrossed size={20} />
+          {avisoEquipo}
+        </div>
       )}
 
       {/* En la pantalla de TI, si no queda nadie, el aviso ocupa toda la pantalla. */}
       {kiosk && todosEnAlmuerzo && (
         <div className="almuerzo-overlay">
-          <div className="almuerzo-emoji">🍽️</div>
+          <UtensilsCrossed className="almuerzo-icono" />
           <h2>Estamos en tiempo de almuerzo</h2>
-          <p className="almuerzo-regreso">Regresamos a las {formatGtTime(regresoEquipo!)}</p>
-          <p className="almuerzo-falta">
-            {minutosParaRegreso <= 1 ? "En un momento" : `En ${minutosParaRegreso} minutos`}
+          <p className="almuerzo-regreso">
+            {regresoTarde ? "Regresamos en breve" : `Regresamos a las ${formatGtTime(regresoEquipo!)}`}
           </p>
+          {!regresoTarde && (
+            <p className="almuerzo-falta">
+              {minutosParaRegreso <= 1 ? "En un momento" : `En ${minutosParaRegreso} minutos`}
+            </p>
+          )}
           <p className="almuerzo-reloj">{hora}</p>
         </div>
       )}
 
       {equipoAhora.length > 0 && (
         <div className="hoy-equipo">
-          {equipoAhora.map(({ tecnico, estado, almuerzo }) => (
+          {equipoAhora.map(({ tecnico, estado, almuerzo, tarde }) => (
             <span key={tecnico.id} className={`hoy-equipo-chip ${estado}`}>
               <i style={{ background: tecnico.color || "#22d3ee" }} />
               <b>{tecnico.nombre}</b>
               {estado === "disponible" && (almuerzo?.pospuesto ? "Disponible · almuerzo pendiente" : "Disponible")}
               {estado === "ausente" && "Ausente"}
-              {estado === "almuerzo" && `En almuerzo hasta ${formatGtTime(almuerzo!.fin)}`}
+              {estado === "almuerzo" &&
+                (tarde ? "En almuerzo · regresa en breve" : `En almuerzo hasta ${formatGtTime(almuerzo!.fin)}`)}
               {!kiosk && estado === "disponible" && (
-                <button onClick={() => salirAlmuerzo(tecnico.id)}>🍽️ Almuerzo</button>
+                <button onClick={() => salirAlmuerzo(tecnico.id)}><UtensilsCrossed size={13} /> Almuerzo</button>
               )}
               {!kiosk && estado === "almuerzo" && almuerzo!.automatico && (
-                <button onClick={() => seguirTrabajando(almuerzo!)}>💼 Sigo trabajando</button>
+                <button onClick={() => seguirTrabajando(almuerzo!)}><Briefcase size={13} /> Sigo trabajando</button>
               )}
               {!kiosk && estado === "almuerzo" && <button onClick={() => regresoAlmuerzo(almuerzo!)}>Regresó</button>}
             </span>
@@ -616,7 +634,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             </h3>
             <div className="hoy-col-body">
               {col.tickets.length === 0 ? (
-                <p className="hoy-empty">{col.key === "sin" ? "Nada por asignar 🎉" : "Sin pendientes"}</p>
+                <p className="hoy-empty">{col.key === "sin" ? "Nada por asignar" : "Sin pendientes"}</p>
               ) : (
                 col.tickets.map(renderCard)
               )}
@@ -648,7 +666,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
                   </article>
                 ) : (
                   <article key={`r-${item.registro.id}`} className="hoy-done hoy-done-rutina">
-                    <span className="hoy-card-id">✓</span>
+                    <Check size={16} className="hoy-card-id" />
                     <span className="hoy-done-area">
                       {rutinaById.get(item.registro.rutina_id)?.nombre ?? "Rutina"}
                     </span>
@@ -702,13 +720,13 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
                   title={r.descripcion ?? undefined}
                 >
                   <span className="hoy-rutina-check">
-                    {!registro ? "⬜" : registro.omitida ? "❌" : registro.automatica ? "☑️" : "✅"}
+                    {!registro ? <Square size={16} /> : registro.omitida ? <CircleX size={16} /> : <CircleCheck size={16} />}
                   </span>
                   {horaRutina && <span className="hoy-rutina-hora">{horaRutina}</span>}
                   <span className="hoy-rutina-nombre">{r.nombre}</span>
                   {tecnico && (
                     <span className="hoy-rutina-tec" style={{ color: tecnico.color || undefined }}>
-                      {r.rotacion?.length ? "🔄 " : ""}
+                      {r.rotacion?.length ? <Repeat size={12} className="inline-icon" /> : null}
                       {tecnico.nombre}
                     </span>
                   )}

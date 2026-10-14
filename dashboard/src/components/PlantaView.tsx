@@ -4,6 +4,7 @@ import { NIVEL_LABEL, TIPO_LABEL, areaColor, areaMatches, ladoArea } from "../pl
 import { FloorPlan, Rect } from "./FloorPlan";
 import { Focus3D, Plant3D } from "./Plant3D";
 import { AreaDraft, AreaEditorModal } from "./AreaEditorModal";
+import { ArrowDown, ArrowUp, Box, Check, Map as MapIcon, Pencil } from "lucide-react";
 
 interface PlantaViewProps {
   tickets: Ticket[];
@@ -192,7 +193,7 @@ export function PlantaView({ tickets, initialAreaId, onOpenTicket }: PlantaViewP
         <div className="planta-toolbar">
           <div className="segmented">
             <button className={modo === "plano" ? "active" : ""} onClick={() => setModo("plano")}>
-              🗺️ Plano
+              <MapIcon size={15} /> Plano
             </button>
             <button
               className={modo === "3d" ? "active" : ""}
@@ -201,17 +202,17 @@ export function PlantaView({ tickets, initialAreaId, onOpenTicket }: PlantaViewP
                 setEditing(false);
               }}
             >
-              🧊 Vista 3D
+              <Box size={15} /> Vista 3D
             </button>
           </div>
 
           {modo === "plano" ? (
             <div className="segmented">
               <button className={nivel === 1 ? "active" : ""} onClick={() => setNivel(1)}>
-                ⬇️ Planta baja
+                <ArrowDown size={15} /> Planta baja
               </button>
               <button className={nivel === 2 ? "active" : ""} onClick={() => setNivel(2)}>
-                ⬆️ Planta alta
+                <ArrowUp size={15} /> Planta alta
               </button>
             </div>
           ) : (
@@ -241,7 +242,7 @@ export function PlantaView({ tickets, initialAreaId, onOpenTicket }: PlantaViewP
               className={`action-button${editing ? " action-button-primary" : ""}`}
               onClick={() => setEditing((v) => !v)}
             >
-              {editing ? "✓ Terminar edición" : "✏️ Editar plano"}
+              {editing ? <><Check size={15} /> Terminar edición</> : <><Pencil size={15} /> Editar plano</>}
             </button>
           )}
         </div>
@@ -351,7 +352,7 @@ export function PlantaView({ tickets, initialAreaId, onOpenTicket }: PlantaViewP
                 className="action-button"
                 onClick={() => setEditor({ isNew: false, id: selected.id, draft: toDraft(selected) })}
               >
-                ✏️ Editar datos
+                <Pencil size={15} /> Editar datos
               </button>
               <button className="action-button" onClick={() => setSelectedId(null)}>
                 Cerrar
@@ -363,7 +364,7 @@ export function PlantaView({ tickets, initialAreaId, onOpenTicket }: PlantaViewP
             <h2>{modo === "3d" ? "Áreas" : NIVEL_LABEL[nivel]}</h2>
             {areas.filter((a) => a.tipo !== "produccion").length === 0 && (
               <p className="empty-state">
-                Aún no hay áreas dibujadas. Usa “✏️ Editar plano” y arrastra sobre el plano para agregar la primera.
+                Aún no hay áreas dibujadas. Usa “Editar plano” y arrastra sobre el plano para agregar la primera.
               </p>
             )}
             <ul className="area-list">

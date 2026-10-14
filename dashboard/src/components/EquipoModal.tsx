@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Ausencia, supabase, Tecnico } from "../supabaseClient";
 import { AREA_COLORS } from "../planUtils";
+import { X } from "lucide-react";
 
 interface EquipoModalProps {
   tecnicos: Tecnico[];
@@ -88,7 +89,7 @@ export function EquipoModal({ tecnicos, hoy, onClose }: EquipoModalProps) {
         <div className="modal-header">
           <h2>Equipo de TI</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
         <p className="doc-hint">Cada persona activa aparece como columna en la pantalla y en “Asignar”.</p>
@@ -203,7 +204,7 @@ export function EquipoModal({ tecnicos, hoy, onClose }: EquipoModalProps) {
                     </small>
                   </span>
                   <button className="modal-close" aria-label="Quitar" onClick={() => quitarAusencia(a.id)}>
-                    ✕
+                    <X size={18} />
                   </button>
                 </li>
               ))}

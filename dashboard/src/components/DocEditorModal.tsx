@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { DocEntry, supabase } from "../supabaseClient";
 import { countSteps } from "../docsUtils";
 import { resizeImageFile } from "../imageUtils";
+import { AlertTriangle, ImagePlus, Plus, Trash2, X } from "lucide-react";
 
 export interface DocDraft {
   title: string;
@@ -123,7 +124,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
         <div className="modal-header">
           <h2>{entry ? "Editar entrada" : "Nueva entrada"}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -205,7 +206,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
             placeholder="Ej: KeePass > Google Workspace admin"
           />
           <div className="doc-cred-note">
-            ⚠️ Aquí va <b>dónde encontrar</b> la contraseña (el nombre de la entrada en tu gestor), no la contraseña
+            <AlertTriangle size={14} className="inline-icon" /> Aquí va <b>dónde encontrar</b> la contraseña (el nombre de la entrada en tu gestor), no la contraseña
             en sí.
           </div>
         </div>
@@ -214,7 +215,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
           <label htmlFor="docBody">Contenido / procedimiento</label>
           <div className="doc-toolbar">
             <button type="button" className="action-button" onClick={insertStep}>
-              ➕ Añadir paso
+              <Plus size={15} /> Añadir paso
             </button>
             <button
               type="button"
@@ -222,7 +223,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingImage}
             >
-              {uploadingImage ? "Subiendo..." : "🖼️ Insertar imagen"}
+              {uploadingImage ? "Subiendo..." : <><ImagePlus size={15} /> Insertar imagen</>}
             </button>
             <input
               ref={fileInputRef}
@@ -252,7 +253,7 @@ export function DocEditorModal({ entry, categories, saving, onSave, onDelete, on
         <div className="doc-modal-footer">
           {entry ? (
             <button className="action-button doc-danger" onClick={onDelete}>
-              🗑 Eliminar
+              <Trash2 size={15} /> Eliminar
             </button>
           ) : (
             <span />

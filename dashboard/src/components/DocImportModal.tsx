@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { FolderOpen, X } from "lucide-react";
 
 interface DocImportModalProps {
   onImport: (jsonText: string) => Promise<void>;
@@ -29,7 +30,7 @@ export function DocImportModal({ onImport, onClose }: DocImportModalProps) {
         <div className="modal-header">
           <h2>Importar respaldo</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -47,7 +48,7 @@ export function DocImportModal({ onImport, onClose }: DocImportModalProps) {
 
         <div className="doc-modal-footer">
           <button className="action-button" onClick={() => fileInputRef.current?.click()}>
-            📁 Elegir archivo
+            <FolderOpen size={15} /> Elegir archivo
           </button>
           <input
             ref={fileInputRef}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DocEntry } from "../supabaseClient";
 import { formatDocDate, parseBodySegments } from "../docsUtils";
+import { Check, Copy, Pencil, X } from "lucide-react";
 
 interface DocDetailModalProps {
   entry: DocEntry;
@@ -23,7 +24,7 @@ function CopyButton({ value }: { value: string }) {
 
   return (
     <button className="doc-copy-btn" onClick={handleCopy} title="Copiar" type="button">
-      {copied ? "✓" : "⧉"}
+      {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
   );
 }
@@ -38,10 +39,10 @@ export function DocDetailModal({ entry, onEdit, onClose }: DocDetailModalProps) 
           <h2>{entry.title}</h2>
           <div className="doc-detail-actions">
             <button className="action-button" onClick={onEdit}>
-              ✏️ Editar
+              <Pencil size={15} /> Editar
             </button>
             <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-              ✕
+              <X size={18} />
             </button>
           </div>
         </div>

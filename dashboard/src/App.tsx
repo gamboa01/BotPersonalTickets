@@ -14,6 +14,7 @@ import { DocsView } from "./components/DocsView";
 import { PlantaView } from "./components/PlantaView";
 import { HoyView } from "./components/HoyView";
 import { gtDayKey } from "./timezone";
+import { BookOpen, CalendarDays, Factory, Plus, Ticket as TicketIcon } from "lucide-react";
 
 const TREND_DAYS = 14;
 
@@ -313,16 +314,16 @@ export default function App() {
           <p className="subtitle">Trazabilidad de incidencias reportadas vía Telegram</p>
           <nav className="tabs">
             <button className={view === "hoy" ? "tab active" : "tab"} onClick={() => setView("hoy")}>
-              📅 Hoy
+              <CalendarDays size={15} /> Hoy
             </button>
             <button className={view === "tickets" ? "tab active" : "tab"} onClick={() => setView("tickets")}>
-              🎫 Tickets
+              <TicketIcon size={15} /> Tickets
             </button>
             <button className={view === "docs" ? "tab active" : "tab"} onClick={() => setView("docs")}>
-              📓 Documentación
+              <BookOpen size={15} /> Documentación
             </button>
             <button className={view === "planta" ? "tab active" : "tab"} onClick={() => setView("planta")}>
-              🏭 Planta
+              <Factory size={15} /> Planta
             </button>
           </nav>
         </div>
@@ -330,7 +331,7 @@ export default function App() {
           {view === "tickets" && (
             <>
               <button className="action-button action-button-primary" onClick={() => setRegistrando(true)}>
-                + Registrar atención
+                <Plus size={15} /> Registrar atención
               </button>
             </>
           )}

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Adjunto, Comentario, Tecnico, Ticket } from "../supabaseClient";
 import { formatGt } from "../timezone";
+import { Ban, Camera, CircleCheck, Pencil, RotateCcw, X } from "lucide-react";
 
 // Mismo tope que el bot (MAX_ADJUNTOS_POR_TICKET) y que agregar_adjunto().
 const MAX_FOTOS = 4;
@@ -87,7 +88,7 @@ export function TicketDetailModal({
         <div className="modal-header">
           <h2>Ticket #{ticket.id}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -136,16 +137,16 @@ export function TicketDetailModal({
         <div className="modal-actions">
           {pendiente && (
             <button className="action-button action-button-primary" onClick={() => abrir("resolver")}>
-              ✅ Resolver
+              <CircleCheck size={15} /> Resolver
             </button>
           )}
           {!pendiente && (
             <button className="action-button action-button-primary" onClick={() => abrir("reabrir")}>
-              🔁 Reabrir
+              <RotateCcw size={15} /> Reabrir
             </button>
           )}
           <button className="action-button" onClick={onEdit}>
-            ✏️ Editar
+            <Pencil size={15} /> Editar
           </button>
           <button
             className="action-button"
@@ -153,7 +154,7 @@ export function TicketDetailModal({
             disabled={!puedeFoto || subiendo}
             title={puedeFoto ? "Adjuntar una foto" : `Máximo ${MAX_FOTOS} fotos por ticket`}
           >
-            {subiendo ? "Subiendo..." : `📷 Foto (${adjuntos.length}/${MAX_FOTOS})`}
+            {subiendo ? "Subiendo..." : <><Camera size={15} /> Foto ({adjuntos.length}/{MAX_FOTOS})</>}
           </button>
           <input
             ref={fileInput}
@@ -168,7 +169,7 @@ export function TicketDetailModal({
           />
           {ticket.estado !== "anulado" && (
             <button className="action-button doc-danger" onClick={() => abrir("anular")}>
-              🚫 Anular
+              <Ban size={15} /> Anular
             </button>
           )}
         </div>

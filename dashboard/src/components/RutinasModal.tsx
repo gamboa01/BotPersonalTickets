@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ExcepcionDia, JornadaDia, Rutina, supabase, Tecnico } from "../supabaseClient";
 import { DIAS_CORTOS, DIAS_LARGOS, SEMANA, describirDias, describirHora, responsableDelDia } from "../rutinasUtils";
+import { CalendarDays, ClipboardList, Repeat, Trash2, X } from "lucide-react";
 
 interface RutinasModalProps {
   rutinas: Rutina[];
@@ -155,16 +156,16 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
         <div className="modal-header">
           <h2>Rutinas</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
 
         <div className="segmented rutinas-tabs">
           <button className={tab === "rutinas" ? "active" : ""} onClick={() => setTab("rutinas")}>
-            📋 Rutinas
+            <ClipboardList size={15} /> Rutinas
           </button>
           <button className={tab === "calendario" ? "active" : ""} onClick={() => setTab("calendario")}>
-            🗓️ Calendario
+            <CalendarDays size={15} /> Calendario
           </button>
         </div>
 
@@ -207,7 +208,7 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
                 }}
               >
                 <option value="">Cualquiera</option>
-                <option value="rotativo">🔄 Rotativo (se turnan cada día)</option>
+                <option value="rotativo">Rotativo (se turnan cada día)</option>
                 {tecnicos
                   .filter((t) => t.activo || t.id === editando.draft.tecnico_id)
                   .map((t) => (
@@ -334,7 +335,7 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
             <div className="doc-modal-footer">
               {editando.id !== null ? (
                 <button className="action-button doc-danger" onClick={eliminarRutina}>
-                  🗑 Eliminar
+                  <Trash2 size={15} /> Eliminar
                 </button>
               ) : (
                 <span />
@@ -365,7 +366,7 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
                       <small>{describirDias(r.dias)}</small>
                     </span>
                     <span className="rutinas-admin-tec" style={{ color: turno.length ? undefined : tecnico?.color ?? undefined }}>
-                      {turno.length ? `🔄 ${turno.join(" / ")}` : tecnico?.nombre ?? "Cualquiera"}
+                      {turno.length ? <><Repeat size={12} className="inline-icon" /> {turno.join(" / ")}</> : tecnico?.nombre ?? "Cualquiera"}
                     </span>
                   </li>
                 );
@@ -520,7 +521,7 @@ export function RutinasModal({ rutinas, tecnicos, jornada, excepciones, hoy, onC
                       aria-label="Quitar"
                       onClick={() => guardar(supabase.from("calendario_excepciones").delete().eq("fecha", e.fecha))}
                     >
-                      ✕
+                      <X size={18} />
                     </button>
                   </li>
                 ))}

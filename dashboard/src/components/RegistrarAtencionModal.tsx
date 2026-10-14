@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Area, Categoria, Prioridad, supabase, Tecnico, Ticket } from "../supabaseClient";
 import { NIVEL_LABEL } from "../planUtils";
 import { GT_TIMEZONE } from "../timezone";
+import { Clock, X } from "lucide-react";
 
 interface RegistrarAtencionModalProps {
   // Si no se pasan, el modal las carga (p. ej. al editar desde la pestaña Tickets).
@@ -14,10 +15,10 @@ interface RegistrarAtencionModalProps {
 
 const TECNICO_KEY = "atencion-tecnico";
 const PRIORIDADES: { value: Prioridad; label: string }[] = [
-  { value: "baja", label: "🟢 Baja" },
-  { value: "media", label: "🟡 Media" },
-  { value: "alta", label: "🟠 Alta" },
-  { value: "critica", label: "🔴 Crítica" },
+  { value: "baja", label: "Baja" },
+  { value: "media", label: "Media" },
+  { value: "alta", label: "Alta" },
+  { value: "critica", label: "Crítica" },
 ];
 
 // Valor para <input type="datetime-local"> en hora de Guatemala (por defecto, ahora).
@@ -138,7 +139,7 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
         <div className="modal-header">
           <h2>{ticket ? `Editar ticket #${ticket.id}` : "Registrar atención"}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -225,6 +226,7 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
                   className={prioridad === p.value ? "active" : ""}
                   onClick={() => setPrioridad(p.value)}
                 >
+                  <span className={`prio-dot prio-${p.value}`} />
                   {p.label}
                 </button>
               ))}
@@ -240,7 +242,7 @@ export function RegistrarAtencionModal({ areas: areasProp, tecnicos, ticket, onC
 
         {!cambiarHora && (
           <button type="button" className="link-button" onClick={() => setCambiarHora(true)}>
-            🕒 ¿Lo registras tarde? Cambiar hora
+            <Clock size={14} /> ¿Lo registras tarde? Cambiar hora
           </button>
         )}
 

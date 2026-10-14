@@ -2332,9 +2332,10 @@ mark {
   font-size: clamp(16px, 1.4vw, 34px);
 }
 
-.almuerzo-emoji {
-  font-size: 6em;
-  line-height: 1;
+.almuerzo-icono {
+  width: 6em;
+  height: 6em;
+  color: var(--neon-amber);
   animation: almuerzo-flotar 3s ease-in-out infinite;
 }
 
@@ -2372,4 +2373,113 @@ mark {
   font-size: 1.6em;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
+}
+
+/* ---------- Íconos (lucide-react) ---------- */
+
+.action-button,
+.tab,
+.segmented button,
+.logout-button,
+.link-button,
+.hoy-equipo-chip button,
+.area-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-button svg,
+.tab svg,
+.segmented button svg {
+  flex-shrink: 0;
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inline-icon {
+  vertical-align: -2px;
+  flex-shrink: 0;
+}
+
+.inline-icon-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hoy-card-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.hoy-card-where {
+  flex-basis: 100%;
+}
+
+.hoy-rutina-check {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.hoy-rutina.done .hoy-rutina-check {
+  color: var(--neon-green);
+}
+
+.hoy-rutina.auto .hoy-rutina-check {
+  color: var(--text-muted);
+}
+
+.hoy-rutina.omitida .hoy-rutina-check {
+  color: var(--neon-red);
+}
+
+.hoy-rutina-tec {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.hoy-done-rutina .hoy-card-id {
+  margin-top: 2px;
+}
+
+.hoy-aviso {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+}
+
+.hoy-aviso svg {
+  flex-shrink: 0;
+}
+
+.prio-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.prio-baja {
+  background: var(--neon-green);
+}
+
+.prio-media {
+  background: var(--neon-amber);
+}
+
+.prio-alta {
+  background: #fb923c;
+}
+
+.prio-critica {
+  background: #f43f5e;
 }

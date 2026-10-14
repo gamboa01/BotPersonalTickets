@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AreaTipo } from "../supabaseClient";
 import { AREA_COLORS, GRID_H, GRID_W, NIVEL_LABEL, TIPO_LABEL, clampRect } from "../planUtils";
+import { Trash2, X } from "lucide-react";
 
 export interface AreaDraft {
   nombre: string;
@@ -57,7 +58,7 @@ export function AreaEditorModal({ initial, isNew, saving, onSave, onDelete, onCl
         <div className="modal-header">
           <h2>{isNew ? "Nueva área" : "Editar área"}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -174,7 +175,7 @@ export function AreaEditorModal({ initial, isNew, saving, onSave, onDelete, onCl
         <div className="doc-modal-footer">
           {!isNew ? (
             <button className="action-button doc-danger" onClick={onDelete}>
-              🗑 Eliminar
+              <Trash2 size={15} /> Eliminar
             </button>
           ) : (
             <span />

@@ -12,6 +12,7 @@ import {
 import { DocEditorModal, DocDraft } from "./DocEditorModal";
 import { DocDetailModal } from "./DocDetailModal";
 import { DocImportModal } from "./DocImportModal";
+import { Download, Image as ImageIcon, Printer, Upload } from "lucide-react";
 
 function escapeHtmlForPrint(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -250,13 +251,13 @@ export function DocsView() {
         <div className="docs-backup">
           <div className="docs-rail-label">Respaldo</div>
           <button className="action-button doc-full-width" onClick={exportJson}>
-            ⬇️ Exportar .json
+            <Download size={15} /> Exportar .json
           </button>
           <button className="action-button doc-full-width" onClick={() => setShowImport(true)}>
-            ⬆️ Importar .json
+            <Upload size={15} /> Importar .json
           </button>
           <button className="action-button doc-full-width" onClick={printPdf}>
-            🖨️ Exportar a PDF
+            <Printer size={15} /> Exportar a PDF
           </button>
         </div>
       </aside>
@@ -308,7 +309,7 @@ export function DocsView() {
                   {e.username && <span><b>usuario</b> {e.username}</span>}
                   {e.url && <span><b>url</b> {e.url.replace(/^https?:\/\//, "")}</span>}
                   {e.cred_ref && <span><b>credencial</b> {e.cred_ref}</span>}
-                  {e.body && new RegExp(IMAGE_MARKDOWN_RE).test(e.body) && <span>📷 con imágenes</span>}
+                  {e.body && new RegExp(IMAGE_MARKDOWN_RE).test(e.body) && <span className="inline-icon-text"><ImageIcon size={13} /> con imágenes</span>}
                 </div>
                 {e.body && (
                   <p className="docs-card-preview">
