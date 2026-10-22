@@ -160,11 +160,11 @@ function areaRows(areas: any[]) {
 const FLOOR_KEYBOARD = {
   inline_keyboard: [
     [
-      { text: "⬇️ Planta baja", callback_data: "piso:1" },
-      { text: "⬆️ Planta alta", callback_data: "piso:2" },
+      { text: "Planta baja", callback_data: "piso:1" },
+      { text: "Planta alta", callback_data: "piso:2" },
     ],
-    [{ text: "🤷 No sé / no aplica", callback_data: "area:0" }],
-    [{ text: "❌ Cancelar", callback_data: "cancel" }],
+    [{ text: "No sé / no aplica", callback_data: "area:0" }],
+    [{ text: "Cancelar", callback_data: "cancel" }],
   ],
 };
 
@@ -185,7 +185,7 @@ async function askCategory(
     : "Selecciona una categoría:";
   await sendMessage(chatId, prompt, {
     reply_markup: {
-      inline_keyboard: [...categoryRows(categorias), [{ text: "❌ Cancelar", callback_data: "cancel" }]],
+      inline_keyboard: [...categoryRows(categorias), [{ text: "Cancelar", callback_data: "cancel" }]],
     },
   });
 }
@@ -202,7 +202,7 @@ async function startTicketFlow(chatId: number, telegramId: number, payload: { re
     return;
   }
   await setSession(telegramId, "awaiting_area", payload);
-  await sendMessage(chatId, "📍 ¿En qué planta está el problema?", { reply_markup: FLOOR_KEYBOARD });
+  await sendMessage(chatId, "¿En qué planta está el problema?", { reply_markup: FLOOR_KEYBOARD });
 }
 
 // deno-lint-ignore no-explicit-any
@@ -213,13 +213,13 @@ async function sendAreaDetail(chatId: number, area: any) {
     .eq("area_id", area.id)
     .in("estado", ["abierto", "en_progreso"]);
 
-  let msg = `📍 <b>${escapeHtml(area.nombre)}</b>\n${NIVEL_LABEL[area.nivel]} · ${ladoArea(area)}`;
-  if (area.ubicacion) msg += `\n🧭 ${escapeHtml(area.ubicacion)}`;
-  if (area.encargado) msg += `\n👤 Encargado: ${escapeHtml(area.encargado)}`;
-  if (area.extension) msg += `\n☎️ Ext.: ${escapeHtml(area.extension)}`;
-  if (area.notas) msg += `\n📝 ${escapeHtml(area.notas)}`;
-  if (area.tipo !== "referencia") msg += `\n🎫 Tickets abiertos: ${abiertos ?? 0}`;
-  if (DASHBOARD_URL) msg += `\n\n<a href="${DASHBOARD_URL}#area=${area.id}">🗺️ Ver en el plano</a>`;
+  let msg = `<b>${escapeHtml(area.nombre)}</b>\n${NIVEL_LABEL[area.nivel]} · ${ladoArea(area)}`;
+  if (area.ubicacion) msg += `\nCómo llegar: ${escapeHtml(area.ubicacion)}`;
+  if (area.encargado) msg += `\nEncargado: ${escapeHtml(area.encargado)}`;
+  if (area.extension) msg += `\nExt.: ${escapeHtml(area.extension)}`;
+  if (area.notas) msg += `\nNotas: ${escapeHtml(area.notas)}`;
+  if (area.tipo !== "referencia") msg += `\nTickets abiertos: ${abiertos ?? 0}`;
+  if (DASHBOARD_URL) msg += `\n\n<a href="${DASHBOARD_URL}#area=${area.id}">Ver en el plano</a>`;
   await sendMessage(chatId, msg, { disable_web_page_preview: true });
 }
 
@@ -274,7 +274,7 @@ function isAllowed(telegramId: number) {
 
 // Se muestra el ID para que la persona se lo pueda pasar al admin si debe tener acceso.
 function deniedText(telegramId: number) {
-  return `⛔ No tienes acceso a este bot.\nTu ID de Telegram es <code>${telegramId}</code>.`;
+  return `No tienes acceso a este bot.\nTu ID de Telegram es <code>${telegramId}</code>.`;
 }
 
 // Avisa al usuario que reportó el ticket, salvo que sea la misma persona
@@ -310,8 +310,8 @@ async function presentDraft(
   const reply_markup = {
     inline_keyboard: [
       [
-        { text: "✅ Listo", callback_data: `confirm:${kind}` },
-        { text: "✏️ Editar", callback_data: `edit:${kind}` },
+        { text: "Listo", callback_data: `confirm:${kind}` },
+        { text: "Editar", callback_data: `edit:${kind}` },
       ],
     ],
   };
@@ -336,8 +336,8 @@ async function offerPhoto(chatId: number, telegramId: number, ticketId: number) 
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "✅ Sí", callback_data: "foto:si" },
-          { text: "🚫 No", callback_data: "foto:no" },
+          { text: "Sí", callback_data: "foto:si" },
+          { text: "No", callback_data: "foto:no" },
         ],
       ],
     },
@@ -408,13 +408,13 @@ async function handlePhoto(chatId: number, telegramId: number, name: string, pho
 
   // Se queda en "awaiting_foto": puede seguir mandando fotos hasta el tope,
   // sin que le anunciemos el número exacto (para no invitar a llenarlo siempre).
-  await sendMessage(chatId, "📎 Foto adjuntada. Puedes enviar otra o usar /cancelar para terminar.");
+  await sendMessage(chatId, "Foto adjuntada. Puedes enviar otra o usar /cancelar para terminar.");
 
   if (ticket.reportado_por !== telegramId) {
-    await sendPhoto(Number(ticket.reportado_por), largest.file_id, `📎 Foto nueva en tu ticket #${ticket_id}`);
+    await sendPhoto(Number(ticket.reportado_por), largest.file_id, `Foto nueva en tu ticket #${ticket_id}`);
   } else {
     if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
-      await sendPhoto(NOTIFY_ADMIN_ID, largest.file_id, `📎 Foto nueva en el ticket #${ticket_id} (de ${escapeHtml(name)})`);
+      await sendPhoto(NOTIFY_ADMIN_ID, largest.file_id, `Foto nueva en el ticket #${ticket_id} (de ${escapeHtml(name)})`);
     }
   }
 }
@@ -441,7 +441,7 @@ async function isRateLimited(chatId: number, telegramId: number): Promise<boolea
   await supabase.from("rate_limits").update({ count: newCount }).eq("telegram_id", telegramId);
 
   if (newCount === RATE_LIMIT_MAX + 1) {
-    await sendMessage(chatId, "⏳ Estás enviando demasiados mensajes. Espera un minuto e intenta de nuevo.");
+    await sendMessage(chatId, "Estás enviando demasiados mensajes. Espera un minuto e intenta de nuevo.");
   }
 
   return newCount > RATE_LIMIT_MAX;
@@ -551,7 +551,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         }
         break;
       }
-      await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
+      await sendMessage(chatId, `Hola ${escapeHtml(name)}\n\n${helpText(isAdmin(telegramId))}`);
       break;
     }
 
@@ -629,14 +629,14 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
       await sendMessage(
         chatId,
         ok
-          ? "✅ Menú de comandos actualizado. Si no lo ves, cierra y vuelve a abrir el chat."
+          ? "Menú de comandos actualizado. Si no lo ves, cierra y vuelve a abrir el chat."
           : "Ocurrió un error actualizando el menú, intenta de nuevo."
       );
       break;
     }
 
     case "/ayuda":
-      await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
+      await sendMessage(chatId, `Hola ${escapeHtml(name)}\n\n${helpText(isAdmin(telegramId))}`);
       break;
 
     case "/nuevo": {
@@ -915,13 +915,13 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         break;
       }
       if (!rangos?.length) {
-        await sendMessage(chatId, `🌐 ${arg}\nNo está dentro de ningún rango registrado.`);
+        await sendMessage(chatId, `IP ${arg}\nNo está dentro de ningún rango registrado.`);
         break;
       }
       // El primero es el más específico; los demás son rangos más amplios que también la contienen.
       const [principal, ...otros] = rangos;
       let msg =
-        `🌐 ${arg}\n` +
+        `IP ${arg}\n` +
         `Política: <b>${escapeHtml(principal.politica)}</b>\n` +
         `Rango: ${principal.desde} – ${principal.hasta}`;
       if (principal.descripcion) msg += `\n${escapeHtml(principal.descripcion)}`;
@@ -938,7 +938,7 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
     case "/cancelar": {
       const session = await getSession(telegramId);
       await clearSession(telegramId);
-      await sendMessage(chatId, session ? "❌ Operación cancelada." : "No tienes ninguna operación en curso.");
+      await sendMessage(chatId, session ? "Operación cancelada." : "No tienes ninguna operación en curso.");
       break;
     }
 
@@ -1227,13 +1227,13 @@ async function handleCallback(callback: any) {
 
   if (data === "cancel") {
     await clearSession(telegramId);
-    await sendMessage(chatId, "❌ Operación cancelada.");
+    await sendMessage(chatId, "Operación cancelada.");
     return;
   }
 
   if (data === "foto:no") {
     await clearSession(telegramId);
-    await sendMessage(chatId, "👍 Listo, sin foto.");
+    await sendMessage(chatId, "Listo, sin foto.");
     return;
   }
 
@@ -1252,7 +1252,7 @@ async function handleCallback(callback: any) {
     await supabase
       .from("comentarios")
       .insert({ ticket_id: ticketId, autor: callback.from.first_name ?? "Bot", texto: `Área elegida: ${area.nombre}` });
-    await sendMessage(chatId, `📍 Ticket #${ticketId}: área ${escapeHtml(area.nombre)}.`);
+    await sendMessage(chatId, `Ticket #${ticketId}: área ${escapeHtml(area.nombre)}.`);
     return;
   }
 
@@ -1316,7 +1316,7 @@ async function handleCallback(callback: any) {
       message_id: callback.message.message_id,
       reply_markup: { inline_keyboard: [] },
     });
-    await sendMessage(chatId, resolver ? `✅ Ticket #${ticketId} resuelto.` : `🚫 Ticket #${ticketId} anulado.`);
+    await sendMessage(chatId, resolver ? `Ticket #${ticketId} resuelto.` : `Ticket #${ticketId} anulado.`);
     return;
   }
 
@@ -1335,7 +1335,7 @@ async function handleCallback(callback: any) {
     const messageId = callback.message.message_id;
     const piso = data.split(":")[1];
     if (piso === "back") {
-      await editMessageText(chatId, messageId, "📍 ¿En qué planta está el problema?", { reply_markup: FLOOR_KEYBOARD });
+      await editMessageText(chatId, messageId, "¿En qué planta está el problema?", { reply_markup: FLOOR_KEYBOARD });
       return;
     }
     const nivel = Number(piso);
@@ -1351,12 +1351,12 @@ async function handleCallback(callback: any) {
       });
       return;
     }
-    await editMessageText(chatId, messageId, `📍 ${NIVEL_LABEL[nivel]}: ¿en qué área?`, {
+    await editMessageText(chatId, messageId, `${NIVEL_LABEL[nivel]}: ¿en qué área?`, {
       reply_markup: {
         inline_keyboard: [
           ...areaRows(areas),
-          [{ text: "⬅️ Cambiar planta", callback_data: "piso:back" }],
-          [{ text: "❌ Cancelar", callback_data: "cancel" }],
+          [{ text: "Cambiar planta", callback_data: "piso:back" }],
+          [{ text: "Cancelar", callback_data: "cancel" }],
         ],
       },
     });
@@ -1376,7 +1376,7 @@ async function handleCallback(callback: any) {
       nombre = area?.nombre ?? nombre;
     }
     // Deja fijada la elección en el mensaje y quita los botones.
-    await editMessageText(chatId, callback.message.message_id, `📍 Área: <b>${escapeHtml(nombre)}</b>`, {
+    await editMessageText(chatId, callback.message.message_id, `Área: <b>${escapeHtml(nombre)}</b>`, {
       reply_markup: { inline_keyboard: [] },
     });
     // deno-lint-ignore no-explicit-any
@@ -1395,14 +1395,14 @@ async function handleCallback(callback: any) {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "🟢 Baja", callback_data: "pri:baja" },
-            { text: "🟡 Media", callback_data: "pri:media" },
+            { text: "Baja", callback_data: "pri:baja" },
+            { text: "Media", callback_data: "pri:media" },
           ],
           [
-            { text: "🟠 Alta", callback_data: "pri:alta" },
-            { text: "🔴 Crítica", callback_data: "pri:critica" },
+            { text: "Alta", callback_data: "pri:alta" },
+            { text: "Crítica", callback_data: "pri:critica" },
           ],
-          [{ text: "❌ Cancelar", callback_data: "cancel" }],
+          [{ text: "Cancelar", callback_data: "cancel" }],
         ],
       },
     });
@@ -1427,7 +1427,7 @@ async function handleCallback(callback: any) {
     // No hay forma de prellenar el texto del usuario en Telegram; solo le
     // pedimos que lo reescriba, y ese nuevo texto reemplazará el mismo
     // mensaje de vista previa (handleFreeText detecta el paso "confirming_*").
-    await sendMessage(chatId, "✏️ Escribe el nuevo texto:");
+    await sendMessage(chatId, "Escribe el nuevo texto:");
     return;
   }
 
@@ -1449,7 +1449,7 @@ async function handleCallback(callback: any) {
       await editMessageText(
         chatId,
         draftMessageId,
-        `<b>${DRAFT_LABELS[kind]}</b>\n${escapeHtml(draft)}\n\n✅ Enviado.`,
+        `<b>${DRAFT_LABELS[kind]}</b>\n${escapeHtml(draft)}\n\nEnviado.`,
         { reply_markup: { inline_keyboard: [] } }
       );
     }
@@ -1473,12 +1473,12 @@ async function handleCallback(callback: any) {
         await sendMessage(chatId, "Ocurrió un error creando el ticket. Intenta de nuevo con /nuevo.");
         return;
       }
-      await sendMessage(chatId, `✅ Ticket #${ticket.id} creado con prioridad ${prioridad}.`);
+      await sendMessage(chatId, `Ticket #${ticket.id} creado con prioridad ${prioridad}.`);
 
       if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
         await sendMessage(
           NOTIFY_ADMIN_ID,
-          `🆕 <b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nÁrea: ${escapeHtml(
+          `<b>Ticket #${ticket.id}</b>\nDe: ${escapeHtml(name)}\nÁrea: ${escapeHtml(
             ticket.areas?.nombre ?? "-"
           )}\nPrioridad: ${prioridad}\nCreado: ${formatGt(
             ticket.created_at
@@ -1498,13 +1498,13 @@ async function handleCallback(callback: any) {
         .eq("id", ticket_id)
         .select("reportado_por")
         .single();
-      await sendMessage(chatId, `✅ Ticket #${ticket_id} actualizado (en progreso).`);
+      await sendMessage(chatId, `Ticket #${ticket_id} actualizado (en progreso).`);
 
       if (ticket?.reportado_por) {
         await notifyReporter(
           ticket.reportado_por,
           telegramId,
-          `🔧 <b>Actualización de tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
+          `<b>Actualización de tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
         );
       }
       await offerPhoto(chatId, telegramId, ticket_id);
@@ -1520,13 +1520,13 @@ async function handleCallback(callback: any) {
         .eq("id", ticket_id)
         .select("reportado_por")
         .single();
-      await sendMessage(chatId, `✅ Ticket #${ticket_id} marcado como resuelto.`);
+      await sendMessage(chatId, `Ticket #${ticket_id} marcado como resuelto.`);
 
       if (ticket?.reportado_por) {
         await notifyReporter(
           ticket.reportado_por,
           telegramId,
-          `✅ <b>Tu ticket #${ticket_id} fue resuelto</b>\n${escapeHtml(draft)}`
+          `<b>Tu ticket #${ticket_id} fue resuelto</b>\n${escapeHtml(draft)}`
         );
       }
       await offerPhoto(chatId, telegramId, ticket_id);
@@ -1542,20 +1542,20 @@ async function handleCallback(callback: any) {
         .eq("id", ticket_id)
         .select("reportado_por")
         .single();
-      await sendMessage(chatId, `🔁 Ticket #${ticket_id} reabierto.`);
+      await sendMessage(chatId, `Ticket #${ticket_id} reabierto.`);
 
       if (ticket?.reportado_por) {
         if (ticket.reportado_por !== telegramId) {
           await notifyReporter(
             ticket.reportado_por,
             telegramId,
-            `🔁 <b>Tu ticket #${ticket_id} fue reabierto</b>\n${escapeHtml(draft)}`
+            `<b>Tu ticket #${ticket_id} fue reabierto</b>\n${escapeHtml(draft)}`
           );
         } else {
           if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
             await sendMessage(
               NOTIFY_ADMIN_ID,
-              `🔁 <b>Ticket #${ticket_id} reabierto por quien lo reportó</b>\n${escapeHtml(draft)}`
+              `<b>Ticket #${ticket_id} reabierto por quien lo reportó</b>\n${escapeHtml(draft)}`
             );
           }
         }
@@ -1572,20 +1572,20 @@ async function handleCallback(callback: any) {
         .select("reportado_por")
         .eq("id", ticket_id)
         .maybeSingle();
-      await sendMessage(chatId, `✅ Comentario agregado al ticket #${ticket_id}.`);
+      await sendMessage(chatId, `Comentario agregado al ticket #${ticket_id}.`);
 
       if (ticket?.reportado_por) {
         if (ticket.reportado_por !== telegramId) {
           await notifyReporter(
             ticket.reportado_por,
             telegramId,
-            `💬 <b>Nuevo comentario en tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
+            `<b>Nuevo comentario en tu ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
           );
         } else {
           if (NOTIFY_ADMIN_ID && !isAdmin(telegramId)) {
             await sendMessage(
               NOTIFY_ADMIN_ID,
-              `💬 <b>Comentario de ${escapeHtml(name)} en el ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
+              `<b>Comentario de ${escapeHtml(name)} en el ticket #${ticket_id}</b>\n${escapeHtml(draft)}`
             );
           }
         }
@@ -1643,7 +1643,7 @@ Deno.serve(async (req) => {
         } else if (message.photo) {
           await handlePhoto(chatId, telegramId, name, message.photo);
         } else if (message.document) {
-          await sendMessage(chatId, "📎 Por favor reenvía la imagen como foto normal (no como archivo).");
+          await sendMessage(chatId, "Por favor reenvía la imagen como foto normal (no como archivo).");
         } else if (text) {
           await handleFreeText(chatId, telegramId, text);
         }
