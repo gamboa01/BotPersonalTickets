@@ -12,6 +12,7 @@ import { vigilarNuevaVersion } from "./autoActualizar";
 import { Login } from "./components/Login";
 import { DocsView } from "./components/DocsView";
 import { PlantaView } from "./components/PlantaView";
+import { ResueltosPorEquipo } from "./components/ResueltosPorEquipo";
 import { HoyView } from "./components/HoyView";
 import { gtDayKey } from "./timezone";
 import { BookOpen, CalendarDays, Factory, Plus, Ticket as TicketIcon } from "lucide-react";
@@ -360,6 +361,11 @@ export default function App() {
               value={stats.promedioResolucion !== null ? formatHours(stats.promedioResolucion) : "-"}
               accent="#c084fc"
             />
+          </section>
+
+          <section className="panel">
+            <h2>Resueltos por integrante</h2>
+            <ResueltosPorEquipo tickets={vigentes} tecnicos={tecnicos} />
           </section>
 
           <section className="chart-grid">

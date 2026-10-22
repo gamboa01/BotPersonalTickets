@@ -467,6 +467,7 @@ const ADMIN_COMMANDS = [
   { command: "registrar", description: "Ticket a nombre de otra persona: /registrar <nombre>" },
   { command: "seguimiento", description: "Seguimiento de un ticket: /seguimiento <id>" },
   { command: "resolver", description: "Resolver un ticket: /resolver <id>" },
+  { command: "asignar", description: "Asignar un ticket: /asignar <id> <nombre>" },
   { command: "prestamos", description: "Ver el equipo prestado y marcar devoluciones" },
   { command: "actualizarmenu", description: "Actualizar este menú de comandos" },
 ];
@@ -503,12 +504,15 @@ function helpText(esAdmin: boolean) {
 /ip &lt;dirección&gt; - ver en qué rango y política del firewall está una IP
 /actualizarmenu - actualizar el menú de comandos de Telegram
 
+/asignar &lt;id&gt; &lt;nombre&gt; - asignar un ticket (sin nombre, muestra botones)
 /prestamos - ver el equipo prestado y marcar devoluciones
 
-<b>Registro rápido de ticket</b>: manda un mensaje (sin /) de 3 líneas
-Departamento
-Nombre de quien lo pide
-Solicitud
+<b>Registro rápido de ticket</b>: manda un mensaje (sin /), una cosa por línea
+Área (puedes agregar "planta baja" o "alta")
+Categoría
+Qué sucede
+A quién se asigna (opcional)
+Prioridad: baja, media, alta o crítica (opcional)
 
 <b>Registro rápido de préstamo</b>: un mensaje que empiece con "Préstamo"
 Préstamo
@@ -548,6 +552,41 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         break;
       }
       await sendMessage(chatId, `Hola ${escapeHtml(name)} 👋\n\n${helpText(isAdmin(telegramId))}`);
+      break;
+    }
+
+    case "/asignar": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para asignar tickets.");
+        break;
+      }
+      const [idTexto, ...nombreParts] = rest;
+      const id = Number(idTexto);
+      if (!id) {
+        await sendMessage(chatId, "Uso: /asignar <id> <nombre>, por ejemplo /asignar 50 Luis");
+        break;
+      }
+      const { data: ticket } = await supabase.from("tickets").select("id, descripcion").eq("id", id).maybeSingle();
+      if (!ticket) {
+        await sendMessage(chatId, `No existe el ticket #${id}`);
+        break;
+      }
+      const { data: tecnicos } = await supabase.from("tecnicos").select("id, nombre").eq("activo", true).order("id");
+      const nombreBuscado = nombreParts.join(" ");
+      const encontrados = nombreBuscado ? buscarPorNombre(nombreBuscado, tecnicos ?? []) : [];
+      if (encontrados.length !== 1) {
+        // Sin nombre, o no se reconoció: se ofrecen botones con el equipo.
+        await sendMessage(
+          chatId,
+          nombreBuscado
+            ? `No reconocí a "${escapeHtml(nombreBuscado)}". ¿A quién asigno el ticket #${id}?`
+            : `¿A quién asigno el ticket #${id}?`,
+          { reply_markup: { inline_keyboard: botonesAsignar(id, tecnicos ?? []) } }
+        );
+        break;
+      }
+      await asignarDesdeBot(id, encontrados[0], name);
+      await sendMessage(chatId, `Ticket #${id} asignado a ${escapeHtml(encontrados[0].nombre)}.`);
       break;
     }
 
@@ -908,27 +947,125 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
   }
 }
 
-// Registro rápido (solo admin, sin operación en curso): un mensaje de 3+ líneas
-//   Departamento
-//   Nombre de quien lo pide
-//   Solicitud (puede seguir en varias líneas)
-// crea el ticket al instante y ofrece marcarlo resuelto o anularlo.
-async function registroRapido(chatId: number, telegramId: number, lineas: string[]) {
-  const [depto, nombre, ...resto] = lineas;
-  const solicitud = resto.join("\n");
+// ---------- Registro rápido y asignación ----------
 
-  const { data: areas } = await supabase.from("areas").select("id, nombre").neq("tipo", "referencia");
-  const candidatas = buscarAreas(depto, areas ?? []);
+type Prioridad = "baja" | "media" | "alta" | "critica";
+const PRIORIDAD_POR_PALABRA: Record<string, Prioridad> = {
+  baja: "baja",
+  media: "media",
+  normal: "media",
+  alta: "alta",
+  urgente: "critica",
+  critica: "critica",
+};
+const PRIORIDAD_TXT: Record<Prioridad, string> = { baja: "Baja", media: "Media", alta: "Alta", critica: "Crítica" };
+
+function prioridadDe(texto: string): Prioridad | null {
+  return PRIORIDAD_POR_PALABRA[claveArea(texto)] ?? null;
+}
+
+// "Enfermería planta baja", "CAD alta", "RRHH pa": separa la planta del nombre del área.
+const PALABRAS_PLANTA = new Set(["planta", "nivel", "piso", "baja", "alta", "pb", "pa", "abajo", "arriba"]);
+function separarPlanta(texto: string): { nivel: 1 | 2 | null; area: string } {
+  const palabras = normalizar(texto).replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
+  const nivel = palabras.some((w) => ["baja", "pb", "abajo"].includes(w))
+    ? 1
+    : palabras.some((w) => ["alta", "pa", "arriba"].includes(w))
+      ? 2
+      : null;
+  return { nivel, area: palabras.filter((w) => !PALABRAS_PLANTA.has(w)).join(" ") };
+}
+
+// Coincidencia por nombre (categorías, técnicos): exacta o, si no, cada palabra
+// escrita debe ser el inicio de una palabra del nombre ("impresora" → "Impresoras y etiquetas").
+function buscarPorNombre<T extends { nombre: string }>(texto: string, lista: T[]): T[] {
+  const buscado = claveArea(texto);
+  if (!buscado) return [];
+  const exacta = lista.find((x) => claveArea(x.nombre) === buscado);
+  if (exacta) return [exacta];
+  const palabras = buscado.split(" ");
+  return lista.filter((x) => {
+    const delNombre = claveArea(x.nombre).split(" ");
+    return palabras.every((p) => delNombre.some((w) => w.startsWith(p)));
+  });
+}
+
+// Asigna un ticket a un técnico y lo deja en el historial (igual que el dashboard).
+async function asignarDesdeBot(ticketId: number, tecnico: { id: number; nombre: string }, autor: string) {
+  const { data } = await supabase
+    .from("tickets")
+    .update({ asignado_id: tecnico.id, asignado_at: new Date().toISOString() })
+    .eq("id", ticketId)
+    .select("id")
+    .maybeSingle();
+  if (!data) return false;
+  await supabase.from("comentarios").insert({ ticket_id: ticketId, autor, texto: `Asignado a ${tecnico.nombre}` });
+  return true;
+}
+
+// deno-lint-ignore no-explicit-any
+function botonesAsignar(ticketId: number, tecnicos: any[]) {
+  const filas = [];
+  for (let i = 0; i < tecnicos.length; i += 3) {
+    filas.push(
+      tecnicos.slice(i, i + 3).map((t) => ({ text: `Asignar a ${t.nombre}`, callback_data: `rapasig:${ticketId}:${t.id}` }))
+    );
+  }
+  return filas;
+}
+
+// Registro rápido (solo admin, sin operación en curso): un mensaje de 3+ líneas
+//   1. Área (puede incluir la planta: "Enfermería planta baja", "CAD alta")
+//   2. Categoría (si no coincide con ninguna, se toma como quién lo pide: formato anterior)
+//   3. Qué sucede
+//   4+. Opcionales, en cualquier orden: a quién se asigna y la prioridad
+//       (baja / media / alta / crítica). Otra línea que no sea ninguna de esas
+//       se toma como quién lo pide o se suma a la descripción.
+async function registroRapido(chatId: number, telegramId: number, lineas: string[]) {
+  const [areaTxt, segunda, tercera, ...extras] = lineas;
+
+  const [{ data: areas }, { data: categorias }, { data: tecnicos }] = await Promise.all([
+    supabase.from("areas").select("id, nombre, nivel").neq("tipo", "referencia"),
+    supabase.from("categorias").select("id, nombre").eq("activa", true),
+    supabase.from("tecnicos").select("id, nombre").eq("activo", true).order("id"),
+  ]);
+
+  // Línea 2: categoría, o quién lo pide si no se parece a ninguna (compatibilidad).
+  const cats = buscarPorNombre(segunda, categorias ?? []);
+  const categoria = cats.length === 1 ? cats[0] : null;
+  let pidio: string | null = cats.length ? null : segunda;
+  const avisos: string[] = [];
+  if (cats.length > 1) avisos.push(`La categoría "${escapeHtml(segunda)}" coincide con varias; quedó sin categoría.`);
+
+  const descripcion = [tercera];
+  let prioridad: Prioridad = "media";
+  let asignado: { id: number; nombre: string } | null = null;
+  for (const extra of extras) {
+    const prio = prioridadDe(extra);
+    const tecs = buscarPorNombre(extra, tecnicos ?? []);
+    if (prio) prioridad = prio;
+    else if (tecs.length === 1 && !asignado) asignado = tecs[0];
+    else if (!pidio) pidio = extra;
+    else descripcion.push(extra);
+  }
+
+  // Área, filtrando por planta si se indicó.
+  const { nivel, area: areaBuscada } = separarPlanta(areaTxt);
+  const enPlanta = (areas ?? []).filter((a) => !nivel || a.nivel === nivel);
+  const candidatas = buscarAreas(areaBuscada || areaTxt, enPlanta);
   const area = candidatas.length === 1 ? candidatas[0] : null;
 
   const { data: ticket, error } = await supabase
     .from("tickets")
     .insert({
-      descripcion: solicitud,
+      descripcion: descripcion.join("\n"),
       area_id: area?.id ?? null,
-      prioridad: "media",
+      categoria_id: categoria?.id ?? null,
+      prioridad,
+      asignado_id: asignado?.id ?? null,
+      asignado_at: asignado ? new Date().toISOString() : null,
       reportado_por: telegramId,
-      reportado_por_nombre: nombre,
+      reportado_por_nombre: pidio,
     })
     .select("id")
     .single();
@@ -937,32 +1074,37 @@ async function registroRapido(chatId: number, telegramId: number, lineas: string
     return;
   }
 
-  // Si el departamento no coincide con el croquis, que no se pierda lo que se escribió.
-  if (!area) {
-    await supabase
-      .from("comentarios")
-      .insert({ ticket_id: ticket.id, autor: "Bot", texto: `Departamento indicado: ${depto}` });
-  }
+  const comentarios = [];
+  if (asignado) comentarios.push({ ticket_id: ticket.id, autor: "Bot", texto: `Asignado a ${asignado.nombre}` });
+  // Si el área no coincide con el croquis, que no se pierda lo que se escribió.
+  if (!area) comentarios.push({ ticket_id: ticket.id, autor: "Bot", texto: `Área indicada: ${areaTxt}` });
+  if (comentarios.length) await supabase.from("comentarios").insert(comentarios);
+
+  if (!area && candidatas.length > 1) avisos.push(`Hay varias áreas que coinciden con "${escapeHtml(areaTxt)}", elige cuál.`);
+  else if (!area) avisos.push(`No encontré el área "${escapeHtml(areaTxt)}" en el croquis; quedó sin área.`);
 
   let msg =
-    `✅ <b>Ticket #${ticket.id} registrado</b>\n` +
-    `📍 ${escapeHtml(area?.nombre ?? depto)}\n` +
-    `👤 ${escapeHtml(nombre)}\n` +
-    `📝 ${escapeHtml(solicitud)}`;
-  if (!area && candidatas.length > 1) {
-    msg += `\n\n📍 Hay varias áreas que coinciden con "${escapeHtml(depto)}", ¿cuál es?`;
-  } else if (!area) {
-    msg += `\n\n⚠️ No encontré el área "${escapeHtml(depto)}" en el croquis; quedó sin área (corrígelo en el dashboard con ✏️ Editar).`;
-  }
+    `<b>Ticket #${ticket.id} registrado</b>\n` +
+    `Área: ${escapeHtml(area ? `${area.nombre} (${NIVEL_LABEL[area.nivel]})` : areaTxt)}\n` +
+    `Categoría: ${escapeHtml(categoria?.nombre ?? "-")}\n` +
+    `Prioridad: ${PRIORIDAD_TXT[prioridad]}\n` +
+    `Atiende: ${escapeHtml(asignado?.nombre ?? "Sin asignar")}\n` +
+    (pidio ? `Pidió: ${escapeHtml(pidio)}\n` : "") +
+    `\n${escapeHtml(descripcion.join("\n"))}`;
+  if (avisos.length) msg += `\n\n${avisos.join("\n")}`;
+
   await sendMessage(chatId, msg, {
     reply_markup: {
       inline_keyboard: [
-        ...(!area ? areaRows(candidatas).map((fila) =>
-          fila.map((b) => ({ text: `📍 ${b.text}`, callback_data: `rapar:${ticket.id}:${b.callback_data.split(":")[1]}` }))
-        ) : []),
+        ...(!area
+          ? areaRows(candidatas).map((fila) =>
+              fila.map((b) => ({ text: b.text, callback_data: `rapar:${ticket.id}:${b.callback_data.split(":")[1]}` }))
+            )
+          : []),
+        ...(!asignado ? botonesAsignar(ticket.id, tecnicos ?? []) : []),
         [
-          { text: "✅ Ya quedó resuelto", callback_data: `rapres:${ticket.id}` },
-          { text: "🚫 Anular", callback_data: `rapanul:${ticket.id}` },
+          { text: "Ya quedó resuelto", callback_data: `rapres:${ticket.id}` },
+          { text: "Anular", callback_data: `rapanul:${ticket.id}` },
         ],
       ],
     },
@@ -1111,6 +1253,23 @@ async function handleCallback(callback: any) {
       .from("comentarios")
       .insert({ ticket_id: ticketId, autor: callback.from.first_name ?? "Bot", texto: `Área elegida: ${area.nombre}` });
     await sendMessage(chatId, `📍 Ticket #${ticketId}: área ${escapeHtml(area.nombre)}.`);
+    return;
+  }
+
+  if (data.startsWith("rapasig:")) {
+    const [, ticketTexto, tecnicoTexto] = data.split(":");
+    const ticketId = Number(ticketTexto);
+    const { data: tecnico } = await supabase
+      .from("tecnicos")
+      .select("id, nombre")
+      .eq("id", Number(tecnicoTexto))
+      .maybeSingle();
+    if (!tecnico) return;
+    const ok = await asignarDesdeBot(ticketId, tecnico, callback.from.first_name ?? "Bot");
+    await sendMessage(
+      chatId,
+      ok ? `Ticket #${ticketId} asignado a ${escapeHtml(tecnico.nombre)}.` : `No existe el ticket #${ticketId}`
+    );
     return;
   }
 

@@ -2570,3 +2570,14 @@ mark {
 .prestamos-buscar {
   width: 100%;
 }
+
+.resueltos-equipo td:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resueltos-equipo td:not(:first-child),
+.resueltos-equipo th:not(:first-child) {
+  text-align: center;
+}
