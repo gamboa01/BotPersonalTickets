@@ -13,6 +13,7 @@ import { Login } from "./components/Login";
 import { DocsView } from "./components/DocsView";
 import { PlantaView } from "./components/PlantaView";
 import { ResueltosPorEquipo } from "./components/ResueltosPorEquipo";
+import { GerenciaView } from "./components/GerenciaView";
 import { HoyView } from "./components/HoyView";
 import { gtDayKey } from "./timezone";
 import { BookOpen, CalendarDays, Factory, Plus, Ticket as TicketIcon } from "lucide-react";
@@ -38,6 +39,8 @@ function formatHours(hours: number) {
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  // undefined = averiguando; null = la cuenta no tiene acceso.
+  const [rol, setRol] = useState<"admin" | "gerencia" | null | undefined>(undefined);
   const [initialAreaId] = useState(areaFromHash);
   const [view, setView] = useState<"hoy" | "tickets" | "docs" | "planta">(initialAreaId !== null ? "planta" : "hoy");
 
@@ -66,11 +69,24 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // La pantalla de TI se recarga sola al publicarse una versión nueva del dashboard.
-  useEffect(() => (KIOSK ? vigilarNuevaVersion() : undefined), []);
+  // Qué vista toca a esta cuenta: admin (todo) o gerencia (solo el resumen).
+  useEffect(() => {
+    if (!session) {
+      setRol(undefined);
+      return;
+    }
+    supabase.rpc("mi_rol").then(({ data, error }) => {
+      // Sin la migración 0027 la función no existe: se trata como antes (admin).
+      setRol(error ? "admin" : ((data as "admin" | "gerencia" | null) ?? null));
+    });
+  }, [session]);
+
+  // Las pantallas que pasan el día abiertas (TI y Gerencia) se recargan solas
+  // al publicarse una versión nueva del dashboard.
+  useEffect(() => (KIOSK || rol === "gerencia" ? vigilarNuevaVersion() : undefined), [rol]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || rol !== "admin") return;
     let active = true;
 
     async function load() {
@@ -115,7 +131,7 @@ export default function App() {
       clearInterval(reload);
       supabase.removeChannel(channel);
     };
-  }, [session]);
+  }, [session, rol]);
 
   // Los anulados (creados por error o duplicados) no cuentan en estadísticas,
   // Hoy ni Planta; solo se ven en la tabla con el filtro "Anulados".
@@ -211,6 +227,17 @@ export default function App() {
 
   if (checkingSession) return <div className="status-screen">Cargando...</div>;
   if (!session) return <Login />;
+  if (rol === undefined) return <div className="status-screen">Cargando...</div>;
+  if (rol === "gerencia") return <GerenciaView />;
+  if (rol === null)
+    return (
+      <div className="status-screen">
+        Esta cuenta no tiene acceso al dashboard.{" "}
+        <button className="logout-button" onClick={() => supabase.auth.signOut()}>
+          Cerrar sesión
+        </button>
+      </div>
+    );
   if (loading) return <div className="status-screen">Cargando datos...</div>;
   if (error) return <div className="status-screen error">Error al cargar datos: {error}</div>;
 

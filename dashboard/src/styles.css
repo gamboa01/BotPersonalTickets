@@ -2581,3 +2581,158 @@ mark {
 .resueltos-equipo th:not(:first-child) {
   text-align: center;
 }
+
+/* ---------- Vista de Gerencia ---------- */
+
+.gerencia {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  font-size: clamp(15px, 1vw, 22px);
+}
+
+.gerencia-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 1.2em;
+}
+
+.gerencia-header h1 {
+  margin: 0;
+  font-size: 1.8em;
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+}
+
+.gerencia-periodos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.gerencia-periodo h2 {
+  margin: 0 0 0.6em;
+}
+
+.gerencia-indicadores {
+  display: flex;
+  justify-content: space-around;
+  gap: 1em;
+}
+
+.gerencia-indicador {
+  position: relative;
+  width: 9em;
+  text-align: center;
+}
+
+.gerencia-indicador svg {
+  width: 9em;
+  height: 9em;
+}
+
+.gerencia-anillo-fondo {
+  fill: none;
+  stroke: var(--panel-alt);
+  stroke-width: 10;
+}
+
+.gerencia-anillo {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.gerencia-indicador.alto .gerencia-anillo {
+  stroke: var(--neon-green);
+}
+
+.gerencia-indicador.medio .gerencia-anillo {
+  stroke: var(--neon-cyan);
+}
+
+.gerencia-indicador.bajo .gerencia-anillo {
+  stroke: var(--neon-amber);
+}
+
+.gerencia-valor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 9em;
+  height: 9em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1em;
+}
+
+.gerencia-indicador .gerencia-valor {
+  font-size: 1.9em;
+  width: calc(9em / 1.9);
+  height: calc(9em / 1.9);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.gerencia-titulo {
+  margin-top: 0.4em;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.gerencia-categorias {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+}
+
+.gerencia-categorias li {
+  display: grid;
+  grid-template-columns: minmax(9em, 14em) 1fr 3.5em;
+  align-items: center;
+  gap: 0.8em;
+}
+
+.gerencia-cat-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gerencia-cat-barra {
+  height: 0.9em;
+  border-radius: 999px;
+  background: var(--panel-alt);
+  overflow: hidden;
+}
+
+.gerencia-cat-barra i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.55), var(--neon-cyan));
+}
+
+.gerencia-cat-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .gerencia-categorias li {
+    grid-template-columns: 1fr 3em;
+  }
+
+  .gerencia-cat-barra {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
