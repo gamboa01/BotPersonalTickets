@@ -231,8 +231,13 @@ export default function App() {
   if (rol === "gerencia") return <GerenciaView />;
   if (rol === null)
     return (
-      <div className="status-screen">
-        Esta cuenta no tiene acceso al dashboard.{" "}
+      <div className="status-screen sin-acceso">
+        <p>
+          La cuenta <b>{session.user.email}</b> no tiene acceso al dashboard.
+        </p>
+        <p className="doc-hint">
+          Si es la cuenta de Gerencia, ese correo tiene que estar registrado en la tabla <code>accesos</code>.
+        </p>
         <button className="logout-button" onClick={() => supabase.auth.signOut()}>
           Cerrar sesión
         </button>
