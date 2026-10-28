@@ -31,6 +31,9 @@ const SOUND_KEY = "hoy-sonido";
 // El almuerzo dura 45 min: al cumplirse, la persona aparece disponible. Si
 // alguien se queda más, se le suman minutos con "+15 min".
 const ALMUERZO_MIN = 45;
+// Las rutinas de esta hora o antes (arranque del día) van arriba de los
+// tickets en cada columna; las demás, debajo.
+const HORA_TEMPRANA = "07:00";
 const EXTENSION_MIN = 15;
 // A esta hora el almuerzo se marca solo para quien no esté ausente.
 const ALMUERZO_HORA = "12:00";
@@ -706,17 +709,36 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
               <span className="hoy-col-count">{col.tickets.length}</span>
             </h3>
             <div className="hoy-col-body">
-              {col.tickets.length === 0 && !rutinasPorColumna.get(col.key)?.length ? (
-                <p className="hoy-empty">{col.key === "sin" ? "Nada por asignar" : "Sin pendientes"}</p>
-              ) : (
-                col.tickets.map(renderCard)
-              )}
-              {!!rutinasPorColumna.get(col.key)?.length && (
-                <>
-                  <h4 className="hoy-col-sub">Rutinas pendientes</h4>
-                  {rutinasPorColumna.get(col.key)!.map((item) => renderRutina(item, col.key !== "sin"))}
-                </>
-              )}
+              {(() => {
+                const rutinasCol = rutinasPorColumna.get(col.key) ?? [];
+                const tempranas = rutinasCol.filter((item) => !!item.hora && item.hora <= HORA_TEMPRANA);
+                const resto = rutinasCol.filter((item) => !tempranas.includes(item));
+                const enSuColumna = col.key !== "sin";
+                return (
+                  <>
+                    {tempranas.length > 0 && (
+                      <>
+                        <h4 className="hoy-col-sub hoy-col-sub-primero">Rutinas de inicio</h4>
+                        {tempranas.map((item) => renderRutina(item, enSuColumna))}
+                      </>
+                    )}
+                    {col.tickets.length === 0 && rutinasCol.length === 0 ? (
+                      <p className="hoy-empty">{col.key === "sin" ? "Nada por asignar" : "Sin pendientes"}</p>
+                    ) : (
+                      <>
+                        {tempranas.length > 0 && col.tickets.length > 0 && <h4 className="hoy-col-sub">Tickets</h4>}
+                        {col.tickets.map(renderCard)}
+                      </>
+                    )}
+                    {resto.length > 0 && (
+                      <>
+                        <h4 className="hoy-col-sub">Rutinas pendientes</h4>
+                        {resto.map((item) => renderRutina(item, enSuColumna))}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </section>
         ))}
