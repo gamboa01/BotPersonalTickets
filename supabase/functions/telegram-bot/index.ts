@@ -469,6 +469,7 @@ const ADMIN_COMMANDS = [
   { command: "resolver", description: "Resolver un ticket: /resolver <id>" },
   { command: "asignar", description: "Asignar un ticket: /asignar <id> <nombre>" },
   { command: "prestamos", description: "Ver el equipo prestado y marcar devoluciones" },
+  { command: "aviso", description: "Mostrar un aviso en la pantalla de TI: /aviso <mensaje>" },
   { command: "actualizarmenu", description: "Actualizar este menú de comandos" },
 ];
 
@@ -506,6 +507,7 @@ function helpText(esAdmin: boolean) {
 
 /asignar &lt;id&gt; &lt;nombre&gt; - asignar un ticket (sin nombre, muestra botones)
 /prestamos - ver el equipo prestado y marcar devoluciones
+/aviso &lt;mensaje&gt; - mostrar un aviso con sonido en la pantalla de TI
 
 <b>Registro rápido de ticket</b>: manda un mensaje (sin /), una cosa por línea
 Área (puedes agregar "planta baja" o "alta")
@@ -617,6 +619,27 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
           ]),
         },
       });
+      break;
+    }
+
+    case "/aviso": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para enviar avisos.");
+        break;
+      }
+      // Se conserva el texto tal cual (con saltos de línea), no el arg ya unido.
+      const mensaje = text.trim().slice(cmd.length).trim().slice(0, 300);
+      if (!mensaje) {
+        await sendMessage(chatId, "Uso: /aviso <mensaje>, por ejemplo /aviso Reunión de equipo en 5 minutos");
+        break;
+      }
+      // Entre 5 y 10 s según lo largo del mensaje.
+      const segundos = Math.min(10, Math.max(5, Math.round(4 + mensaje.length / 15)));
+      const { error } = await supabase.from("avisos").insert({ mensaje, segundos, enviado_por: name });
+      await sendMessage(
+        chatId,
+        error ? "No se pudo enviar el aviso, intenta de nuevo." : `Aviso enviado a la pantalla de TI (${segundos} s).`
+      );
       break;
     }
 

@@ -15,6 +15,7 @@ import { PlantaView } from "./components/PlantaView";
 import { ResueltosPorEquipo } from "./components/ResueltosPorEquipo";
 import { GerenciaView } from "./components/GerenciaView";
 import { HoyView } from "./components/HoyView";
+import { AvisoPantalla } from "./components/AvisoPantalla";
 import { gtDayKey } from "./timezone";
 import { BookOpen, CalendarDays, Factory, Plus, Ticket as TicketIcon } from "lucide-react";
 
@@ -335,6 +336,7 @@ export default function App() {
     return (
       <div className="kiosk-root">
         <HoyView tickets={vigentes} tecnicos={tecnicos} kiosk onOpenTicket={() => {}} />
+        <AvisoPantalla />
       </div>
     );
   }

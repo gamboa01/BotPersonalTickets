@@ -2750,3 +2750,111 @@ mark {
 .hoy-col-sub-primero {
   margin-top: 0;
 }
+
+/* Aviso enviado con /aviso desde el bot (solo #pantalla). Va encima incluso
+   de la pantalla de almuerzo. */
+.aviso-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  padding: 2em 6vw;
+  text-align: center;
+  background: radial-gradient(circle at center, #071a2b 0%, #05070d 75%);
+  color: var(--text);
+  font-size: clamp(16px, 1.4vw, 34px);
+  animation: aviso-entrar 0.35s ease-out;
+}
+
+.aviso-icono {
+  width: 5em;
+  height: 5em;
+  color: var(--neon-cyan, #22d3ee);
+  animation: aviso-pulso 1.2s ease-in-out infinite;
+}
+
+.aviso-etiqueta {
+  font-size: 1.3em;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--neon-cyan, #22d3ee);
+}
+
+.aviso-mensaje {
+  margin: 0.2em 0;
+  max-width: 28em;
+  font-size: 3.4em;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.aviso-firma {
+  font-size: 1.2em;
+  color: var(--muted, #94a3b8);
+}
+
+.aviso-barra {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 0.4em;
+  width: 100%;
+  background: var(--neon-cyan, #22d3ee);
+  transform-origin: left;
+  animation-name: aviso-tiempo;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes aviso-entrar {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes aviso-pulso {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes aviso-tiempo {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.aviso-sonido-bloqueado {
+  position: fixed;
+  right: 1vw;
+  bottom: 1vw;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.35em 0.7em;
+  border-radius: 999px;
+  font-size: 13px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: var(--muted, #94a3b8);
+}
