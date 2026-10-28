@@ -633,12 +633,13 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
         await sendMessage(chatId, "Uso: /aviso <mensaje>, por ejemplo /aviso Reunión de equipo en 5 minutos");
         break;
       }
-      // Entre 5 y 10 s según lo largo del mensaje.
-      const segundos = Math.min(10, Math.max(5, Math.round(4 + mensaje.length / 15)));
+      // 30 s para que alcance a leerse aunque nadie esté viendo la TV; en la
+      // pantalla un clic lo cierra antes.
+      const segundos = 30;
       const { error } = await supabase.from("avisos").insert({ mensaje, segundos, enviado_por: name });
       await sendMessage(
         chatId,
-        error ? "No se pudo enviar el aviso, intenta de nuevo." : `Aviso enviado a la pantalla de TI (${segundos} s).`
+        error ? "No se pudo enviar el aviso, intenta de nuevo." : `Aviso enviado a la pantalla de TI (${segundos} s, un clic en la pantalla lo cierra).`
       );
       break;
     }

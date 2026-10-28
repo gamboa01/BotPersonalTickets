@@ -2795,8 +2795,13 @@ mark {
   overflow-wrap: anywhere;
 }
 
-.aviso-firma {
-  font-size: 1.2em;
+.aviso-overlay {
+  cursor: pointer;
+}
+
+.aviso-cerrar {
+  margin-top: 1em;
+  font-size: 1em;
   color: var(--muted, #94a3b8);
 }
 

@@ -104,12 +104,18 @@ export function AvisoPantalla() {
   }, []);
 
   const actual = cola[0];
+  const cerrar = () => setCola((c) => c.slice(1));
 
   useEffect(() => {
     if (!actual) return;
     sonarCampana();
-    const t = setTimeout(() => setCola((c) => c.slice(1)), actual.segundos * 1000);
-    return () => clearTimeout(t);
+    const t = setTimeout(cerrar, actual.segundos * 1000);
+    const conTecla = (e: KeyboardEvent) => e.key === "Escape" && cerrar();
+    window.addEventListener("keydown", conTecla);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", conTecla);
+    };
   }, [actual]);
 
   return (
@@ -120,11 +126,11 @@ export function AvisoPantalla() {
         </div>
       )}
       {actual && (
-        <div className="aviso-overlay" key={actual.id}>
+        <div className="aviso-overlay" key={actual.id} onClick={cerrar}>
           <Megaphone className="aviso-icono" />
           <span className="aviso-etiqueta">Aviso</span>
           <p className="aviso-mensaje">{actual.mensaje}</p>
-          {actual.enviado_por && <span className="aviso-firma">{actual.enviado_por}</span>}
+          <span className="aviso-cerrar">Toca la pantalla para cerrar</span>
           <div className="aviso-barra" style={{ animationDuration: `${actual.segundos}s` }} />
         </div>
       )}
