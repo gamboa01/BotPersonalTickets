@@ -2863,3 +2863,20 @@ mark {
   border: 1px solid rgba(148, 163, 184, 0.3);
   color: var(--muted, #94a3b8);
 }
+
+.equipo-almuerzo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.equipo-almuerzo input[type="time"] {
+  width: auto;
+}
+
+.equipo-almuerzo input[type="number"] {
+  width: 4.2em;
+}

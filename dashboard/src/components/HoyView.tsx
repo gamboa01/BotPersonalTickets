@@ -28,15 +28,17 @@ const PRIORIDAD_LABEL: Record<Ticket["prioridad"], string> = {
 const SIN_ASIGNAR_COLOR = "#fb7185";
 const NUEVO_MS = 90_000;
 const SOUND_KEY = "hoy-sonido";
-// El almuerzo dura 45 min: al cumplirse, la persona aparece disponible. Si
-// alguien se queda más, se le suman minutos con "+15 min".
+// Almuerzo por persona (Equipo): hora en que se marca solo y duración. Al
+// cumplirse, la persona aparece disponible; si se queda más, "+15 min".
+// Estos valores aplican si la persona no tiene los suyos (sin migración 0030).
 const ALMUERZO_MIN = 45;
+const ALMUERZO_HORA = "12:00";
+const horaAlmuerzo = (t: Tecnico) => (t.almuerzo_hora === undefined ? ALMUERZO_HORA : t.almuerzo_hora);
+const minutosAlmuerzo = (t: Tecnico) => t.almuerzo_min ?? ALMUERZO_MIN;
 // Las rutinas de esta hora o antes (arranque del día) van arriba de los
 // tickets en cada columna; las demás, debajo.
 const HORA_TEMPRANA = "07:00";
 const EXTENSION_MIN = 15;
-// A esta hora el almuerzo se marca solo para quien no esté ausente.
-const ALMUERZO_HORA = "12:00";
 // Respaldo del realtime: si la conexión en vivo se cae (pasa en pantallas que
 // están abiertas todo el día), los datos se vuelven a pedir cada minuto.
 const REFRESCO_MS = 60_000;
@@ -106,7 +108,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
   const knownIds = useRef<Set<number> | null>(null);
   const [registrosListos, setRegistrosListos] = useState<string | null>(null);
   const autoIntentadas = useRef<Set<string>>(new Set());
-  const almuerzoIntentado = useRef<string | null>(null);
+  // "<día>-<técnico>" de los almuerzos automáticos ya intentados.
+  const almuerzoIntentado = useRef(new Set<string>());
 
   const hoy = gtDayKey(new Date(now).toISOString());
 
@@ -394,14 +397,14 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     ? Math.max(0, Math.ceil((new Date(regresoEquipo).getTime() - now) / 60_000))
     : 0;
 
-  async function salirAlmuerzo(tecnicoId: number) {
+  async function salirAlmuerzo(tecnico: Tecnico) {
     const inicio = new Date();
     const { error } = await supabase.from("almuerzos").upsert(
       {
-        tecnico_id: tecnicoId,
+        tecnico_id: tecnico.id,
         fecha: hoy,
         inicio: inicio.toISOString(),
-        fin: new Date(inicio.getTime() + ALMUERZO_MIN * 60_000).toISOString(),
+        fin: new Date(inicio.getTime() + minutosAlmuerzo(tecnico) * 60_000).toISOString(),
         regreso: null,
         automatico: false,
         pospuesto: false,
@@ -411,28 +414,31 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
     if (error) alert(`No se pudo marcar el almuerzo: ${error.message}`);
   }
 
-  // Almuerzo automático: al llegar las 12:00 de un día laboral (que no termine
-  // antes), se marca para quien esté activo, no ausente y sin almuerzo hoy. Quien
-  // siga trabajando lo pospone con "Sigo trabajando" y lo marca a mano al salir.
+  // Almuerzo automático: al llegar la hora de almuerzo de cada persona en un
+  // día laboral (que no termine antes), se marca si está activa, no ausente y
+  // sin almuerzo hoy. Quien siga trabajando lo pospone con "Sigo trabajando" y
+  // lo marca a mano al salir.
   useEffect(() => {
-    const finAuto = sumarMinutos(ALMUERZO_HORA, ALMUERZO_MIN);
-    if (registrosListos !== hoy || almuerzoIntentado.current === hoy) return;
-    if (!infoHoy.laboral || hhmm < ALMUERZO_HORA || hhmm >= finAuto) return;
-    if (infoHoy.salida && infoHoy.salida <= ALMUERZO_HORA) return;
-    almuerzoIntentado.current = hoy;
+    if (registrosListos !== hoy || !infoHoy.laboral) return;
     const conAlmuerzo = new Set(almuerzos.map((a) => a.tecnico_id));
-    const pendientes = tecnicos.filter(
-      (t) => t.activo && !conAlmuerzo.has(t.id) && !ausenteA(ausenciaByTecnico.get(t.id), ALMUERZO_HORA)
-    );
+    const pendientes = tecnicos.filter((t) => {
+      const hora = horaAlmuerzo(t);
+      if (!t.activo || !hora || conAlmuerzo.has(t.id)) return false;
+      if (almuerzoIntentado.current.has(`${hoy}-${t.id}`)) return false;
+      if (hhmm < hora || hhmm >= sumarMinutos(hora, minutosAlmuerzo(t))) return false;
+      if (infoHoy.salida && infoHoy.salida <= hora) return false;
+      return !ausenteA(ausenciaByTecnico.get(t.id), hora);
+    });
     if (!pendientes.length) return;
+    pendientes.forEach((t) => almuerzoIntentado.current.add(`${hoy}-${t.id}`));
     supabase
       .from("almuerzos")
       .upsert(
         pendientes.map((t) => ({
           tecnico_id: t.id,
           fecha: hoy,
-          inicio: new Date(`${hoy}T${ALMUERZO_HORA}:00-06:00`).toISOString(),
-          fin: new Date(`${hoy}T${finAuto}:00-06:00`).toISOString(),
+          inicio: new Date(`${hoy}T${horaAlmuerzo(t)}:00-06:00`).toISOString(),
+          fin: new Date(`${hoy}T${sumarMinutos(horaAlmuerzo(t)!, minutosAlmuerzo(t))}:00-06:00`).toISOString(),
           automatico: true,
         })),
         { onConflict: "tecnico_id,fecha", ignoreDuplicates: true }
@@ -674,11 +680,16 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             <span key={tecnico.id} className={`hoy-equipo-chip ${estado}`}>
               <i style={{ background: tecnico.color || "#22d3ee" }} />
               <b>{tecnico.nombre}</b>
-              {estado === "disponible" && (almuerzo?.pospuesto ? "Disponible · almuerzo pendiente" : "Disponible")}
+              {estado === "disponible" &&
+                (almuerzo?.pospuesto
+                  ? "Disponible · almuerzo pendiente"
+                  : !almuerzo && horaAlmuerzo(tecnico) && hhmm < horaAlmuerzo(tecnico)!
+                    ? `Disponible · almuerzo ${aLaHora(`${hoy}T${horaAlmuerzo(tecnico)}:00-06:00`)}`
+                    : "Disponible")}
               {estado === "ausente" && "Ausente"}
               {estado === "almuerzo" && `En almuerzo hasta ${formatGtTime(almuerzo!.fin)}`}
               {!kiosk && estado === "disponible" && (
-                <button onClick={() => salirAlmuerzo(tecnico.id)}><UtensilsCrossed size={13} /> Almuerzo</button>
+                <button onClick={() => salirAlmuerzo(tecnico)}><UtensilsCrossed size={13} /> Almuerzo</button>
               )}
               {!kiosk && estado === "almuerzo" && almuerzo!.automatico && (
                 <button onClick={() => seguirTrabajando(almuerzo!)}><Briefcase size={13} /> Sigo trabajando</button>

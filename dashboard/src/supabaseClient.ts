@@ -92,6 +92,10 @@ export interface Tecnico {
   nombre: string;
   color: string | null;
   activo: boolean;
+  // Almuerzo automático de la persona ("HH:MM"; null = lo marca a mano) y su
+  // duración. Sin la migración 0030 no vienen: se usan 12:00 y 45 min.
+  almuerzo_hora?: string | null;
+  almuerzo_min?: number;
   created_at: string;
 }
 
@@ -161,7 +165,7 @@ export interface Almuerzo {
   inicio: string;
   fin: string;
   regreso: string | null;
-  // Lo marcó el dashboard a las 12:00 (no la persona).
+  // Lo marcó el dashboard a la hora de almuerzo de la persona (no ella).
   automatico: boolean;
   // "Sigo trabajando": se canceló el automático y el almuerzo sigue pendiente.
   pospuesto: boolean;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Ausencia, supabase, Tecnico } from "../supabaseClient";
 import { AREA_COLORS } from "../planUtils";
-import { X } from "lucide-react";
+import { UtensilsCrossed, X } from "lucide-react";
 
 interface EquipoModalProps {
   tecnicos: Tecnico[];
@@ -92,7 +92,10 @@ export function EquipoModal({ tecnicos, hoy, onClose }: EquipoModalProps) {
             <X size={18} />
           </button>
         </div>
-        <p className="doc-hint">Cada persona activa aparece como columna en la pantalla y en “Asignar”.</p>
+        <p className="doc-hint">
+          Cada persona activa aparece como columna en la pantalla y en “Asignar”. A su hora de almuerzo se marca sola en
+          almuerzo por los minutos indicados; sin hora, lo marca a mano.
+        </p>
 
         <ul className="equipo-list">
           {tecnicos.map((t) => (
@@ -112,6 +115,32 @@ export function EquipoModal({ tecnicos, hoy, onClose }: EquipoModalProps) {
                   if (nombre && nombre !== t.nombre) update(t.id, { nombre });
                 }}
               />
+              {t.almuerzo_min !== undefined && (
+                <label className="equipo-almuerzo" title="Hora en que se marca su almuerzo solo (vacío = lo marca a mano)">
+                  <UtensilsCrossed size={14} />
+                  <input
+                    type="time"
+                    defaultValue={t.almuerzo_hora ?? ""}
+                    onBlur={(e) => {
+                      const hora = e.target.value || null;
+                      if (hora !== (t.almuerzo_hora ?? null)) update(t.id, { almuerzo_hora: hora });
+                    }}
+                  />
+                  <input
+                    type="number"
+                    min={10}
+                    max={120}
+                    step={5}
+                    defaultValue={t.almuerzo_min}
+                    onBlur={(e) => {
+                      const min = Number(e.target.value);
+                      if (min >= 10 && min <= 120 && min !== t.almuerzo_min) update(t.id, { almuerzo_min: min });
+                      else e.target.value = String(t.almuerzo_min);
+                    }}
+                  />
+                  min
+                </label>
+              )}
               <label className="equipo-activo">
                 <input type="checkbox" checked={t.activo} onChange={(e) => update(t.id, { activo: e.target.checked })} />
                 Activo
