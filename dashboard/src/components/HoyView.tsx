@@ -6,6 +6,7 @@ import { EquipoModal } from "./EquipoModal";
 import { RutinasModal } from "./RutinasModal";
 import { CategoriasModal } from "./CategoriasModal";
 import { PrestamosPanel } from "./PrestamosPanel";
+import { PendientesColumna } from "./PendientesColumna";
 import { RegistrarAtencionModal } from "./RegistrarAtencionModal";
 import { MARGEN_AUTO_MIN, ausenteA, cubrirAusencia, diaInfo, rutinasDelDia, sumarMinutos } from "../rutinasUtils";
 import { Tags, Bell, BellOff, Briefcase, Check, CircleCheck, CircleX, MapPin, Maximize, Plus, Repeat, Settings, Square, Tv, Users, UtensilsCrossed } from "lucide-react";
@@ -705,7 +706,7 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
         </div>
       )}
 
-      <div className="hoy-board" style={{ gridTemplateColumns: `repeat(${columnas.length + 1}, minmax(240px, 1fr))` }}>
+      <div className="hoy-board" style={{ gridTemplateColumns: `repeat(${columnas.length + 2}, minmax(240px, 1fr))` }}>
         {columnas.map((col) => (
           <section key={col.key} className="hoy-col">
             <h3 className="hoy-col-title" style={{ borderColor: col.color, color: col.color }}>
@@ -793,6 +794,8 @@ export function HoyView({ tickets, tecnicos, kiosk, onOpenTicket }: HoyViewProps
             )}
           </div>
         </section>
+
+        <PendientesColumna tecnicos={tecnicos} hoy={hoy} now={now} kiosk={kiosk} />
       </div>
 
       {/* Préstamos: solo en la PC, nunca en la pantalla de TI (muestra nombres). */}

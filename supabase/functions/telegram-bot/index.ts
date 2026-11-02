@@ -469,6 +469,8 @@ const ADMIN_COMMANDS = [
   { command: "resolver", description: "Resolver un ticket: /resolver <id>" },
   { command: "asignar", description: "Asignar un ticket: /asignar <id> <nombre>" },
   { command: "prestamos", description: "Ver el equipo prestado y marcar devoluciones" },
+  { command: "pendiente", description: "Anotar en la pizarra de pendientes: /pendiente <texto>" },
+  { command: "pendientes", description: "Ver la pizarra de pendientes y marcar hechos" },
   { command: "aviso", description: "Mostrar un aviso en la pantalla de TI: /aviso <mensaje>" },
   { command: "actualizarmenu", description: "Actualizar este menú de comandos" },
 ];
@@ -507,6 +509,8 @@ function helpText(esAdmin: boolean) {
 
 /asignar &lt;id&gt; &lt;nombre&gt; - asignar un ticket (sin nombre, muestra botones)
 /prestamos - ver el equipo prestado y marcar devoluciones
+/pendiente &lt;texto&gt; - anotar en la pizarra de pendientes (uno por línea)
+/pendientes - ver la pizarra y marcar hechos
 /aviso &lt;mensaje&gt; - mostrar un aviso con sonido en la pantalla de TI
 
 <b>Registro rápido de ticket</b>: manda un mensaje (sin /), una cosa por línea
@@ -616,6 +620,63 @@ async function handleCommand(chatId: number, telegramId: number, name: string, t
           // deno-lint-ignore no-explicit-any
           inline_keyboard: prestamos.map((p: any) => [
             { text: `Devuelto: ${p.equipo} (${p.prestado_a})`.slice(0, 60), callback_data: `prestdev:${p.id}` },
+          ]),
+        },
+      });
+      break;
+    }
+
+    case "/pendiente": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para anotar pendientes.");
+        break;
+      }
+      // Uno por línea: "/pendiente Comprar toner" + salto + "Configurar VPN" son dos.
+      const textos = text
+        .trim()
+        .slice(cmd.length)
+        .split("\n")
+        .map((l) => l.trim().slice(0, 300))
+        .filter(Boolean);
+      if (!textos.length) {
+        await sendMessage(chatId, "Uso: /pendiente <texto>, por ejemplo /pendiente Cambiar switch de corte. Varios: uno por línea.");
+        break;
+      }
+      const { error } = await supabase.from("pendientes").insert(textos.map((texto) => ({ texto })));
+      await sendMessage(
+        chatId,
+        error
+          ? "No se pudo anotar, intenta de nuevo."
+          : textos.length === 1
+            ? `Anotado en la pizarra: ${escapeHtml(textos[0])}`
+            : `Anotados ${textos.length} pendientes en la pizarra.`
+      );
+      break;
+    }
+
+    case "/pendientes": {
+      if (!isAdmin(telegramId)) {
+        await sendMessage(chatId, "No tienes permiso para ver los pendientes.");
+        break;
+      }
+      const { data: pendientes } = await supabase
+        .from("pendientes")
+        .select("id, texto, creado_at, tecnicos(nombre)")
+        .is("hecho_at", null)
+        .order("creado_at");
+      if (!pendientes?.length) {
+        await sendMessage(chatId, "La pizarra está limpia, no hay pendientes.");
+        break;
+      }
+      const lineas = pendientes.map(
+        // deno-lint-ignore no-explicit-any
+        (p: any) => `• ${escapeHtml(p.texto)}${p.tecnicos?.nombre ? ` (${escapeHtml(p.tecnicos.nombre)})` : ""}`
+      );
+      await sendMessage(chatId, `<b>Pendientes</b>\n${lineas.join("\n")}`, {
+        reply_markup: {
+          // deno-lint-ignore no-explicit-any
+          inline_keyboard: pendientes.map((p: any) => [
+            { text: `Hecho: ${p.texto}`.slice(0, 60), callback_data: `pendok:${p.id}` },
           ]),
         },
       });
@@ -1293,6 +1354,22 @@ async function handleCallback(callback: any) {
     await sendMessage(
       chatId,
       ok ? `Ticket #${ticketId} asignado a ${escapeHtml(tecnico.nombre)}.` : `No existe el ticket #${ticketId}`
+    );
+    return;
+  }
+
+  if (data.startsWith("pendok:")) {
+    const id = Number(data.split(":")[1]);
+    const { data: hecho } = await supabase
+      .from("pendientes")
+      .update({ hecho_at: new Date().toISOString() })
+      .eq("id", id)
+      .is("hecho_at", null)
+      .select("texto")
+      .maybeSingle();
+    await sendMessage(
+      chatId,
+      hecho ? `Hecho: ${escapeHtml(hecho.texto)}.` : "Ese pendiente ya estaba marcado como hecho."
     );
     return;
   }

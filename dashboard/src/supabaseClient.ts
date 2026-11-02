@@ -99,6 +99,15 @@ export interface Tecnico {
   created_at: string;
 }
 
+// Pizarra de pendientes del departamento (no son tickets).
+export interface Pendiente {
+  id: number;
+  texto: string;
+  tecnico_id: number | null;
+  creado_at: string;
+  hecho_at: string | null;
+}
+
 // `dias` sigue extract(dow) de Postgres: 0 = domingo … 6 = sábado.
 export interface Rutina {
   id: number;
